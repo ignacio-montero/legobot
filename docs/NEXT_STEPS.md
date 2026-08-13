@@ -19,6 +19,14 @@ Container healthy, using ~24 MB of its 192 MB limit, no published ports.
 | Docker image built & pushed | ✅ `ghcr.io/ignacio-montero/legobot:0.1.0` (amd64, 44 MB) |
 | Deployed to homelab | ✅ Running, healthy, verified no LAN exposure |
 
+## v0.2.0 — piece counts (2026-08-13)
+
+Piece counts now appear in `/list`, `/add`, `/search`, `/check` and availability
+alerts, at zero extra request cost (they ride along in the existing bulk query).
+
+⚠️ **Sets added before v0.2.0 show no count until the next scan populates them.**
+Send `/check` to fill them in immediately rather than waiting for 07:00.
+
 ## Using it
 
 Message **@LEGOBorrowBot** on Telegram. Paste a Brick Borrow product link to
