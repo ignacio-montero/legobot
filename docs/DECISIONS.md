@@ -4,6 +4,40 @@ Newest first. Each entry: what was decided, why, and what was rejected.
 
 ---
 
+## 2026-08-13 — Poll every 10 minutes, not 30
+
+**Decision.** Default `POLL_INTERVAL_MINUTES` is 10. 5 is also safe.
+
+**Why.** The original 30 was chosen defensively, on the assumption that polling
+would carry session/logout risk. It doesn't — the API is anonymous, so there is
+no session to lose and nothing to log out of. Measurements:
+
+- 60 back-to-back requests (5 full scans, zero pause) → **60× HTTP 200**,
+  no 429s, no throttling, slowest single request 0.20 s.
+- Responses carry `cache-control: no-cache` and `x-cache: MISS`, so they are
+  **not** CDN-cached — polling faster genuinely returns fresher data rather
+  than re-reading a stale edge copy.
+- One scan is 12 requests / ~1.3 s. At 10 min over a 12-hour window that is
+  ~860 requests/day, i.e. ~1 request/minute averaged. Negligible for a
+  CDN-fronted commercial store.
+
+Since the whole value of the bot is beating other members to a set, halving the
+mean notification delay from ~15 min to ~5 min is the single cheapest
+improvement available.
+
+**Rejected:** going straight to 1–2 minutes. Nothing observed forbids it, but a
+burst of 12 requests every 60 s starts to look like scraping rather than
+browsing, and there is no evidence the warehouse updates stock that granularly.
+10 min keeps a wide politeness margin for zero practical cost.
+
+**Available if wanted:** the `inventoryStatus: IN_STOCK_STATUS` filter returns
+only in-stock products (392 vs 1127), cutting a scan from 12 requests to 4. Not
+adopted, because absent-from-that-list conflates "out of stock" with "delisted"
+and would cost the rename/vanished detection. Worth revisiting only if the
+interval ever drops below ~5 min.
+
+---
+
 ## 2026-08-13 — Read the storefront catalog API instead of driving a browser
 
 **Decision.** Get availability from Brick Borrow's Wix Stores GraphQL API,

@@ -45,7 +45,7 @@ class Config:
     db_path: str = "/data/legobot.sqlite3"
 
     # Polling cadence and the window during which we bother to poll at all.
-    poll_interval_minutes: int = 30
+    poll_interval_minutes: int = 10
     active_start: dtime = field(default_factory=lambda: dtime(7, 0))
     active_end: dtime = field(default_factory=lambda: dtime(19, 0))
     timezone: ZoneInfo = field(default_factory=lambda: ZoneInfo("Europe/London"))
@@ -88,7 +88,7 @@ class Config:
             telegram_bot_token=token,
             telegram_chat_id=chat_id,
             db_path=os.getenv("LEGOBOT_DB_PATH", "/data/legobot.sqlite3"),
-            poll_interval_minutes=_env_int("POLL_INTERVAL_MINUTES", 30),
+            poll_interval_minutes=_env_int("POLL_INTERVAL_MINUTES", 10),
             active_start=_parse_hhmm(os.getenv("ACTIVE_START", "07:00"), "ACTIVE_START"),
             active_end=_parse_hhmm(os.getenv("ACTIVE_END", "19:00"), "ACTIVE_END"),
             timezone=tz,
