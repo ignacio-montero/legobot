@@ -4,8 +4,8 @@ _Last updated: 2026-08-13_
 
 ## Where this stands
 
-**The bot is built, tested, and verified against the live site.** It is not yet
-deployed, because deployment needs two things only you can produce.
+**DEPLOYED AND RUNNING** on the homelab since 2026-08-13 as `@LEGOBorrowBot`.
+Container healthy, using ~24 MB of its 192 MB limit, no published ports.
 
 | Piece | State |
 |---|---|
@@ -16,22 +16,24 @@ deployed, because deployment needs two things only you can produce.
 | Notification state machine | ✅ Done, 55 tests passing |
 | Telegram commands | ✅ Done (add/search/list/remove/check/pause/resume/status) |
 | Dockerfile + compose + runbook | ✅ Written — `deploy/` |
-| Docker image built & pushed | ⛔ **Blocked** — Docker Desktop wasn't running |
-| Deployed to homelab | ⛔ **Blocked** — needs the Telegram bot token |
+| Docker image built & pushed | ✅ `ghcr.io/ignacio-montero/legobot:0.1.0` (amd64, 44 MB) |
+| Deployed to homelab | ✅ Running, healthy, verified no LAN exposure |
 
-## What's needed from you (~3 minutes)
+## Using it
 
-1. **Create the bot:** Telegram → **@BotFather** → `/newbot` → copy the token.
-2. **Get your chat id:** message the new bot, then open
-   `https://api.telegram.org/bot<TOKEN>/getUpdates` and read
-   `result[0].message.chat.id`.
-3. **Start Docker Desktop** so the image can be built and pushed.
+Message **@LEGOBorrowBot** on Telegram. Paste a Brick Borrow product link to
+start tracking; `/help` lists everything.
 
-Then `deploy/DEPLOY.md` is the runbook end to end.
+⚠️ It polls **07:00–19:00 Europe/London**, so outside those hours it is silent
+by design. Send **`/check`** to force a scan immediately.
 
-I deliberately did not create the bot or handle the token myself — a bot token
-is a live credential, and it should be minted by you and go straight into the
-server's untracked `.env`.
+The token lives only in `services/legobot/.env` on the server (chmod 600) and in
+a gitignored `.env` on the Mac. It was never committed.
+
+**Note on Docker:** this Mac has **Colima**, not Docker Desktop. If `docker`
+commands fail with a socket error, run `colima start`. Colima is ARM, so images
+for the homelab must be cross-built with `--platform linux/amd64` (the runbook
+does this).
 
 ## Also worth knowing
 

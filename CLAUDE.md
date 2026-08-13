@@ -12,12 +12,16 @@ counter-intuitive enough that you will otherwise "fix" working code.
 
 ## Current state (2026-08-13)
 
-**Built, tested (55 passing), verified against the live site. Not yet deployed.**
+**Deployed and running** on the homelab as `@LEGOBorrowBot`, image
+`ghcr.io/ignacio-montero/legobot:0.1.0`. 55 tests passing. Polls every 10 min,
+07:00–19:00 Europe/London.
 
-Blocked on two things only the owner can do: creating the Telegram bot with
-@BotFather (the token is a credential they should mint themselves) and starting
-Docker Desktop so the image can be built and pushed. See
-[docs/NEXT_STEPS.md](docs/NEXT_STEPS.md).
+⚠️ This Mac runs **Colima**, not Docker Desktop — `colima start` if the docker
+socket is missing. Colima is ARM; the homelab is Intel, so always cross-build
+with `--platform linux/amd64`.
+
+⚠️ Only ONE process may long-poll the bot token. The container is using it, so
+do not run the bot locally without stopping it first.
 
 ## The two things that will trip you up
 
