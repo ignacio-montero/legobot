@@ -16,7 +16,11 @@ from .telegram import esc
 
 log = logging.getLogger(__name__)
 
+DEFAULT_AVAILABLE_LIMIT = 20
+MAX_AVAILABLE_LIMIT = 100
+
 COMMAND_MENU = [
+    ("available", "All borrowable sets right now, biggest first"),
     ("add", "Track a set — paste its Brick Borrow link"),
     ("search", "Find a set by name or number, e.g. /search 10349"),
     ("list", "Show everything you're tracking"),
@@ -40,6 +44,10 @@ I check your tracked sets every <b>{interval} minutes</b> between \
 ⚠️ <b>Heads up:</b> Brick Borrow's URLs often name the wrong set — the page at \
 <code>…/lego-10349-icons-happy-plants</code> is actually the Bonsai Tree. I always \
 reply with the <i>real</i> set name so you can check. When in doubt use /search.
+
+<b>Browsing</b>
+/available — every set you could borrow right now, biggest build first
+/available 50 — show more of them (default 20, max 100)
 
 <b>Managing</b>
 /list — what I'm watching, with current status
@@ -112,6 +120,10 @@ class CommandHandler:
             "remove": self._remove,
             "delete": self._remove,
             "rm": self._remove,
+            "available": self._available,
+            "avail": self._available,
+            "browse": self._available,
+            "top": self._available,
             "check": self._check,
             "pause": self._pause,
             "resume": self._resume,
@@ -289,6 +301,69 @@ class CommandHandler:
             names = "\n".join(f"• {esc(m.name)}" for m in matches)
             return f"That matches {len(matches)} sets:\n{names}\n\nUse the number from /list."
         return "Nothing matched. /list to see what you're tracking."
+
+    async def _available(self, arg: str) -> str:
+        """Every borrowable set in the catalogue right now, biggest build first.
+
+        This is a *discovery* command over the whole catalogue — unlike /list,
+        which only covers what you track. It's the "what could I borrow tonight"
+        view, which is why it ranks by piece count: the reason to check is
+        usually to find a big build.
+        """
+        limit = DEFAULT_AVAILABLE_LIMIT
+        if arg:
+            token = arg.strip().split()[0]
+            if not token.isdigit():
+                return (
+                    "Give me a number, e.g. <code>/available 30</code> for the "
+                    f"top 30 (default {DEFAULT_AVAILABLE_LIMIT}, max {MAX_AVAILABLE_LIMIT})."
+                )
+            limit = max(1, min(int(token), MAX_AVAILABLE_LIMIT))
+
+        try:
+            catalog = await self.client.fetch_catalog()
+        except BrickBorrowError as exc:
+            log.warning("available listing failed: %s", exc)
+            return "Couldn't reach the store just now — try again in a minute."
+
+        available = [p for p in catalog if p.available]
+        # Ranked by piece count, so anything without one (the gift card and the
+        # mystery box, which aren't sets) has no place in this view.
+        ranked = sorted(
+            (p for p in available if p.pieces is not None),
+            key=lambda p: p.pieces,
+            reverse=True,
+        )
+        if not ranked:
+            return "Nothing is available to borrow right now."
+
+        tracked_ids = {t.product_id for t in self.store.list_tracked()}
+        shown = ranked[:limit]
+
+        header = (
+            f"🟢 <b>{len(available)} sets available now</b> — "
+            f"top {len(shown)} by piece count"
+        )
+        lines = [header, ""]
+        for index, product in enumerate(shown, start=1):
+            mark = " ✅" if product.id in tracked_ids else ""
+            lines.append(
+                f'{index}. <b>{product.pieces:,}</b> pcs — '
+                f'<a href="{esc(product.url)}">{esc(product.name)}</a>{mark}'
+            )
+
+        lines.append("")
+        if len(ranked) > len(shown):
+            remaining = len(ranked) - len(shown)
+            if limit < MAX_AVAILABLE_LIMIT:
+                lines.append(
+                    f"<i>{remaining} more.</i> <code>/available "
+                    f"{min(limit * 2, MAX_AVAILABLE_LIMIT)}</code> to see further down."
+                )
+            else:
+                lines.append(f"<i>{remaining} more below the top {MAX_AVAILABLE_LIMIT}.</i>")
+        lines.append("✅ = already tracked. Paste any link to start tracking it.")
+        return "\n".join(lines)
 
     async def _check(self, _arg: str) -> str:
         if not self.store.count_tracked():

@@ -21,6 +21,11 @@ class FakeClient:
             raise BrickBorrowError("store is down")
         return self.products.get(slug)
 
+    async def fetch_catalog(self):
+        if self.fail:
+            raise BrickBorrowError("store is down")
+        return list(self.products.values())
+
     async def search(self, text, limit=10):
         if self.fail:
             raise BrickBorrowError("store is down")
@@ -30,8 +35,9 @@ class FakeClient:
         ][:limit]
 
 
-def product(pid="p1", name="LEGO (1) Set A", slug="lego-1-set-a", available=False):
-    return Product(pid, name, slug, available, available)
+def product(pid="p1", name="LEGO (1) Set A", slug="lego-1-set-a", available=False,
+            pieces=None):
+    return Product(pid, name, slug, available, available, pieces)
 
 
 @pytest.fixture
@@ -247,3 +253,100 @@ async def test_free_text_prose_is_not_mistaken_for_slugs(store):
     reply = await handler.handle("hey can you check on that set for me please")
     assert store.count_tracked() == 0
     assert "/search" in reply
+
+
+# ---------------- /available ----------------
+
+
+def catalogue():
+    """A mixed catalogue: available/unavailable, with and without piece counts."""
+    return [
+        product("big", "Eiffel Tower", "eiffel", available=True, pieces=10001),
+        product("mid", "Titanic", "titanic", available=True, pieces=9090),
+        product("small", "Munchlax", "munchlax", available=True, pieces=757),
+        product("gone", "Death Star", "deathstar", available=False, pieces=9023),
+        product("card", "Gift Card", "giftcard", available=True, pieces=None),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_available_ranks_by_pieces_descending(store):
+    handler = build(store, FakeClient(catalogue()))
+    reply = await handler.handle("/available")
+    assert reply.index("Eiffel Tower") < reply.index("Titanic") < reply.index("Munchlax")
+    assert "10,001" in reply
+
+
+@pytest.mark.asyncio
+async def test_available_excludes_unavailable_sets(store):
+    handler = build(store, FakeClient(catalogue()))
+    reply = await handler.handle("/available")
+    assert "Death Star" not in reply       # 9023 pcs, but not borrowable
+    assert "4 sets available now" in reply  # gift card counts as available...
+
+
+@pytest.mark.asyncio
+async def test_available_excludes_items_with_no_piece_count(store):
+    """A piece-count ranking has no place for the gift card / mystery box."""
+    handler = build(store, FakeClient(catalogue()))
+    reply = await handler.handle("/available")
+    assert "Gift Card" not in reply
+
+
+@pytest.mark.asyncio
+async def test_available_marks_sets_you_already_track(store):
+    handler = build(store, FakeClient(catalogue()))
+    await handler.handle("/add https://www.brickborrow.com/product-page/titanic")
+    reply = await handler.handle("/available")
+    line = [ln for ln in reply.split("\n") if "Titanic" in ln][0]
+    assert "✅" in line
+    assert "✅" not in [ln for ln in reply.split("\n") if "Eiffel" in ln][0]
+
+
+@pytest.mark.asyncio
+async def test_available_respects_an_explicit_limit(store):
+    handler = build(store, FakeClient(catalogue()))
+    reply = await handler.handle("/available 2")
+    assert "Eiffel Tower" in reply and "Titanic" in reply
+    assert "Munchlax" not in reply
+    assert "1 more" in reply
+
+
+@pytest.mark.asyncio
+async def test_available_caps_the_limit(store):
+    from legobot.commands import MAX_AVAILABLE_LIMIT
+
+    many = [
+        product(f"p{i}", f"Set {i}", f"s{i}", available=True, pieces=i + 1)
+        for i in range(MAX_AVAILABLE_LIMIT + 30)
+    ]
+    handler = build(store, FakeClient(many))
+    reply = await handler.handle("/available 9999")
+    assert reply.count(" pcs — ") == MAX_AVAILABLE_LIMIT
+
+
+@pytest.mark.asyncio
+async def test_available_rejects_a_non_numeric_argument(store):
+    handler = build(store, FakeClient(catalogue()))
+    reply = await handler.handle("/available lots")
+    assert "number" in reply.lower()
+
+
+@pytest.mark.asyncio
+async def test_available_when_nothing_is_available(store):
+    handler = build(store, FakeClient([product("a", "A", "a", available=False, pieces=100)]))
+    assert "Nothing is available" in await handler.handle("/available")
+
+
+@pytest.mark.asyncio
+async def test_available_survives_the_store_being_down(store):
+    handler = build(store, FakeClient(catalogue(), fail=True))
+    reply = await handler.handle("/available")
+    assert "couldn't reach" in reply.lower()
+
+
+@pytest.mark.asyncio
+async def test_available_aliases(store):
+    handler = build(store, FakeClient(catalogue()))
+    for alias in ("/avail", "/browse", "/top"):
+        assert "Eiffel Tower" in await handler.handle(alias)

@@ -33,6 +33,8 @@ established and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for why it matters.
 
 | Command | What it does |
 |---|---|
+| `/available` | **Every set borrowable right now, biggest build first** |
+| `/available 50` | Show more of them (default 20, max 100) |
 | *(just paste a link)* | Starts tracking that set |
 | `/add <link>` | Track one or more sets |
 | `/search <text>` | Find a set by name or number, e.g. `/search 10349` |
@@ -42,6 +44,16 @@ established and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for why it matters.
 | `/pause` / `/resume` | Silence notifications while you already have a set |
 | `/status` | Running state, window, last check |
 | `/help` | All of the above |
+
+## Two ways to use it
+
+**Monitoring** — track the sets you want and wait to be told when one frees up.
+
+**Discovery** — `/available` answers "what could I borrow *tonight*", ranked by
+piece count across the whole catalogue, with the ones you already track marked.
+Useful because the biggest sets are almost never free: at the time of writing,
+395 sets were available but the largest was 2,870 pieces, while the 10,001-piece
+Eiffel Tower was out on loan.
 
 ## ⚠️ Brick Borrow's URLs name the wrong set
 

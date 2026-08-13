@@ -4,6 +4,31 @@ Newest first. Each entry: what was decided, why, and what was rejected.
 
 ---
 
+## 2026-08-13 — `/available`: catalogue-wide discovery, ranked by pieces
+
+**Decision.** New command listing every borrowable set in the catalogue, sorted
+by piece count descending, default top 20, `/available N` up to 100. Sets you
+already track are marked ✅.
+
+**Why it's a different command from `/list`.** `/list` is *monitoring* — what
+you're waiting for. This is *discovery* — what you could take right now. Ranking
+by pieces reflects why you'd ask: to find a big build. The two answer different
+questions and shouldn't be merged.
+
+**Why a limit at all.** 395 of 1,127 sets were available when this shipped.
+Rendering all of them is ~65,000 characters — Telegram caps a message at 4,096,
+so it would arrive as ~17 notifications. The default of 20 fits in **one**
+message; `/available 100` costs 5. **Design the default around the output
+channel, not around the data.**
+
+**Cost.** One full catalogue sweep (12 requests, ~1.3 s) per invocation, on
+demand only. No change to the background scan.
+
+**Excluded from the ranking:** the Gift Card and Mystery Box, which have no real
+piece count (`01-3000+`). A piece-count ranking has no meaningful slot for them.
+
+---
+
 ## 2026-08-13 — Show piece counts, sourced from `additionalInfo`
 
 **Decision.** Read the store's spec table (`additionalInfo`) and surface the
