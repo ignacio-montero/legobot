@@ -1,0 +1,42 @@
+# legobot — Brick Borrow availability watcher.
+#
+# Copy this to the homelab control repo as
+#   ~/Development/homelab/services/legobot/docker-compose.yml
+# and add that path to the root compose.yaml `include:` list.
+#
+# Source repo: ~/Development/LEGO-borrow-bot (runbook: deploy/DEPLOY.md)
+#
+# Conventions honoured:
+#  - NO published ports. Both of its conversations (api.telegram.org and
+#    brickborrow.com) are OUTBOUND, so there is nothing to bind and no UFW rule
+#    to add. Same shape as tennisbot-prefs.
+#  - Secrets live in an UNTRACKED .env in THIS directory ON THE SERVER.
+#  - mem_limit set, per the 8 GB soldered ceiling.
+#
+# ⚠️ Only ONE process may long-poll a given Telegram bot token. Do not run this
+#    locally while the container is up — the second one gets HTTP 409.
+services:
+  legobot:
+    image: ghcr.io/ignacio-montero/legobot:0.1.0   # pinned; bump to update
+    container_name: legobot
+    restart: unless-stopped
+    init: true                 # PID 1 that reaps zombies and forwards SIGTERM
+    env_file: .env             # untracked on the server: TELEGRAM_BOT_TOKEN + _CHAT_ID
+    environment:
+      TZ: "Europe/London"      # makes the 07:00–19:00 window DST-correct
+      POLL_INTERVAL_MINUTES: "30"
+      ACTIVE_START: "07:00"
+      ACTIVE_END: "19:00"
+      LEGOBOT_DB_PATH: "/data/legobot.sqlite3"
+    volumes:
+      - legobot-data:/data     # the tracking list + last-seen state
+    mem_limit: 192m            # httpx + SQLite only; no browser (cf. 1536m for tennisbot)
+    memswap_limit: 192m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  legobot-data:                # ⚠️ holds your tracked sets — do not `down -v`
