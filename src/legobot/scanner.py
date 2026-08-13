@@ -113,15 +113,17 @@ def render_available_alert(pairs: list[tuple[TrackedSet, Product]]) -> str:
 
     if len(pairs) == 1:
         _, product = pairs[0]
+        detail = f"\n{product.pieces_label}" if product.pieces_label else ""
         return (
             "🟢 <b>Available now</b>\n\n"
-            f"<b>{esc(product.name)}</b>\n"
+            f"<b>{esc(product.name)}</b>{detail}\n"
             f'<a href="{esc(product.url)}">Open on Brick Borrow →</a>'
         )
 
     lines = [f"🟢 <b>{len(pairs)} sets just became available</b>", ""]
     for _, product in pairs:
-        lines.append(f'• <a href="{esc(product.url)}">{esc(product.name)}</a>')
+        suffix = f" · {product.pieces_label}" if product.pieces_label else ""
+        lines.append(f'• <a href="{esc(product.url)}">{esc(product.name)}</a>{suffix}')
     return "\n".join(lines)
 
 

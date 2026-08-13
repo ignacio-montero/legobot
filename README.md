@@ -10,15 +10,20 @@ Brick Borrow lets you subscribe to "notify me when available" for a maximum of
 🟢 Available now
 
 LEGO® (10348) Botanicals™ Japanese Red Maple Bonsai Tree
+474 pcs
 Open on Brick Borrow →
 ```
 
 ## How it works
 
-Every 30 minutes between 07:00 and 19:00 UK time, it reads Brick Borrow's
+Every 10 minutes between 07:00 and 19:00 UK time, it reads Brick Borrow's
 storefront catalog API and compares each tracked set against what it saw last
 time. When one flips from unavailable to available, you get a message — **once**
 per transition, not every cycle.
+
+Piece counts come along for free: the store's spec table ("Age Range", "Pieces",
+"Set No.") is returned by the same bulk query, so showing them costs zero extra
+requests.
 
 No browser, no login, no stored password: the catalogue turns out to be readable
 anonymously. See [docs/RESEARCH.md](docs/RESEARCH.md) for how that was
@@ -31,7 +36,7 @@ established and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for why it matters.
 | *(just paste a link)* | Starts tracking that set |
 | `/add <link>` | Track one or more sets |
 | `/search <text>` | Find a set by name or number, e.g. `/search 10349` |
-| `/list` | Everything you're tracking, with status |
+| `/list` | Everything you're tracking, with status and piece counts |
 | `/remove <n>` | Stop tracking (number from `/list`, or paste the link) |
 | `/check` | Check everything right now |
 | `/pause` / `/resume` | Silence notifications while you already have a set |

@@ -17,7 +17,7 @@
 #    locally while the container is up — the second one gets HTTP 409.
 services:
   legobot:
-    image: ghcr.io/ignacio-montero/legobot:0.1.0   # pinned; bump to update
+    image: ghcr.io/ignacio-montero/legobot:0.2.0   # pinned; bump to update
     container_name: legobot
     restart: unless-stopped
     init: true                 # PID 1 that reaps zombies and forwards SIGTERM

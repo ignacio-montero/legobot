@@ -37,6 +37,18 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 """
 
+# Columns added after the first release. `CREATE TABLE IF NOT EXISTS` does
+# nothing to a table that already exists, so a new column has to be added
+# explicitly or the deployed database keeps the old shape and every query
+# referencing it fails.
+#
+# This is a (deliberately minimal) schema migration. Each entry is applied only
+# if the column is absent, which makes startup idempotent: safe to run against a
+# fresh DB, a half-migrated one, or an already-migrated one.
+MIGRATIONS = [
+    ("tracked", "pieces", "ALTER TABLE tracked ADD COLUMN pieces INTEGER"),
+]
+
 
 @dataclass
 class TrackedSet:
@@ -47,10 +59,15 @@ class TrackedSet:
     last_available: Optional[bool]
     last_seen_at: Optional[int]
     notified_at: Optional[int]
+    pieces: Optional[int] = None
 
     @property
     def url(self) -> str:
         return f"https://www.brickborrow.com/product-page/{self.url_part}"
+
+    @property
+    def pieces_label(self) -> str:
+        return "" if self.pieces is None else f"{self.pieces:,} pcs"
 
 
 def _row_to_tracked(row: sqlite3.Row) -> TrackedSet:
@@ -63,6 +80,7 @@ def _row_to_tracked(row: sqlite3.Row) -> TrackedSet:
         last_available=None if la is None else bool(la),
         last_seen_at=row["last_seen_at"],
         notified_at=row["notified_at"],
+        pieces=row["pieces"] if "pieces" in row.keys() else None,
     )
 
 
@@ -79,6 +97,18 @@ class Store:
             self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Bring an existing database up to the current schema."""
+        for table, column, statement in MIGRATIONS:
+            existing = {
+                row["name"]
+                for row in self._conn.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+            if column not in existing:
+                log.info("migrating: adding %s.%s", table, column)
+                self._conn.execute(statement)
 
     def close(self) -> None:
         self._conn.close()
@@ -100,13 +130,15 @@ class Store:
         ).fetchone()
         return _row_to_tracked(row) if row else None
 
-    def add(self, product_id: str, url_part: str, name: str) -> bool:
+    def add(
+        self, product_id: str, url_part: str, name: str, pieces: Optional[int] = None
+    ) -> bool:
         """Insert a tracked set. Returns False if it was already tracked."""
         try:
             self._conn.execute(
-                "INSERT INTO tracked (product_id, url_part, name, added_at) "
-                "VALUES (?, ?, ?, ?)",
-                (product_id, url_part, name, int(time.time())),
+                "INSERT INTO tracked (product_id, url_part, name, added_at, pieces) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (product_id, url_part, name, int(time.time()), pieces),
             )
             return True
         except sqlite3.IntegrityError:
@@ -127,6 +159,7 @@ class Store:
         available: bool,
         name: Optional[str] = None,
         url_part: Optional[str] = None,
+        pieces: Optional[int] = None,
         notified: bool = False,
     ) -> None:
         now = int(time.time())
@@ -138,6 +171,11 @@ class Store:
         if url_part is not None:
             sets.append("url_part = ?")
             args.append(url_part)
+        if pieces is not None:
+            # Only overwrite on a real value, so a product whose spec table is
+            # briefly malformed doesn't blank a count we already knew.
+            sets.append("pieces = ?")
+            args.append(pieces)
         if notified:
             sets.append("notified_at = ?")
             args.append(now)

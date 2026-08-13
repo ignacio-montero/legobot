@@ -68,3 +68,56 @@ def test_remove_returns_whether_it_existed(store):
     store.add("p1", "s", "N")
     assert store.remove("p1") is True
     assert store.remove("p1") is False
+
+
+def test_pieces_round_trip(store):
+    store.add("p1", "s", "N", 757)
+    assert store.get("p1").pieces == 757
+    assert store.get("p1").pieces_label == "757 pcs"
+
+
+def test_pieces_default_to_none(store):
+    store.add("p1", "s", "N")
+    assert store.get("p1").pieces is None
+    assert store.get("p1").pieces_label == ""
+
+
+def test_record_scan_does_not_blank_a_known_count(store):
+    """A briefly malformed spec table must not erase a piece count we already had."""
+    store.add("p1", "s", "N", 757)
+    store.record_scan("p1", available=True, pieces=None)
+    assert store.get("p1").pieces == 757
+    store.record_scan("p1", available=True, pieces=800)
+    assert store.get("p1").pieces == 800
+
+
+def test_migration_adds_pieces_to_a_pre_existing_database(tmp_path):
+    """The deployed bot already has a DB without this column — it must migrate, not crash."""
+    import sqlite3
+
+    path = str(tmp_path / "old.sqlite3")
+    old = sqlite3.connect(path)
+    old.executescript(
+        """
+        CREATE TABLE tracked (
+            product_id TEXT PRIMARY KEY, url_part TEXT NOT NULL, name TEXT NOT NULL,
+            added_at INTEGER NOT NULL, last_available INTEGER,
+            last_seen_at INTEGER, notified_at INTEGER
+        );
+        CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        INSERT INTO tracked VALUES ('p1','slug','Old Set',1,1,1,NULL);
+        """
+    )
+    old.commit()
+    old.close()
+
+    s = Store(path)                      # must migrate on open
+    item = s.get("p1")
+    assert item is not None              # existing row survives
+    assert item.name == "Old Set"
+    assert item.pieces is None           # new column, no value yet
+    s.record_scan("p1", available=True, pieces=1234)
+    assert s.get("p1").pieces == 1234
+    s.close()
+
+    Store(path).close()                  # idempotent: re-opening must not fail

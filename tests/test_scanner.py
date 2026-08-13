@@ -211,3 +211,82 @@ def test_extract_multiple_links_from_one_message():
         "https://www.brickborrow.com/product-page/set-a"
     )
     assert extract_slugs(text) == ["set-a", "set-b"]
+
+
+# ---------------- piece counts ----------------
+
+from legobot.brickborrow import format_pieces, parse_pieces  # noqa: E402
+
+
+def info(title, description):
+    return [{"title": title, "description": description}]
+
+
+@pytest.mark.parametrize(
+    "html,expected",
+    [
+        ("<p>757</p>\n", 757),          # the common wrapper
+        ("<div>2912</div>\n", 2912),    # the store is inconsistent about tags
+        ("<span>670</span>", 670),
+        ("<p>2,532</p>", 2532),         # one entry uses a thousands separator
+        ("  1  ", 1),                   # smallest real set
+        ("<p>10001</p>", 10001),        # largest (Eiffel Tower)
+    ],
+)
+def test_parse_pieces_handles_the_stores_html_variants(html, expected):
+    assert parse_pieces(info("Pieces", html)) == expected
+
+
+@pytest.mark.parametrize(
+    "html",
+    [
+        "<p>01-3000+</p>",   # gift card / mystery box: a RANGE, not a count
+        "<p>varies</p>",
+        "<p></p>",
+        "",
+    ],
+)
+def test_parse_pieces_refuses_to_guess(html):
+    """A wrong piece count is worse than an absent one — '01-3000+' must not become 1."""
+    assert parse_pieces(info("Pieces", html)) is None
+
+
+def test_parse_pieces_absent_field():
+    assert parse_pieces(info("Age Range", "<p>18+</p>")) is None
+    assert parse_pieces([]) is None
+    assert parse_pieces(None) is None
+
+
+def test_parse_pieces_is_case_insensitive_on_the_title():
+    assert parse_pieces(info("pieces", "<p>42</p>")) == 42
+    assert parse_pieces(info("Piece Count", "<p>42</p>")) == 42
+
+
+def test_parse_pieces_ignores_other_spec_rows():
+    rows = [
+        {"title": "Age Range", "description": "<p>18+</p>"},
+        {"title": "Pieces", "description": "<p>757</p>"},
+        {"title": "Set No.", "description": "<p>72150</p>"},
+    ]
+    assert parse_pieces(rows) == 757
+
+
+def test_product_exposes_pieces_from_the_api_payload():
+    p = Product.from_api(
+        {
+            "id": "x",
+            "name": "N",
+            "urlPart": "u",
+            "isInStock": True,
+            "isSellable": True,
+            "additionalInfo": [{"title": "Pieces", "description": "<p>2,532</p>"}],
+        }
+    )
+    assert p.pieces == 2532
+    assert p.pieces_label == "2,532 pcs"
+
+
+def test_format_pieces_uses_thousands_separators_and_tolerates_none():
+    assert format_pieces(10001) == "10,001 pcs"
+    assert format_pieces(757) == "757 pcs"
+    assert format_pieces(None) == ""

@@ -35,7 +35,19 @@ PAGE_SIZE = 100
 # Fields we read off every product. `isInStock`/`isSellable` are the honest
 # availability signals; `inventory.status` is NOT (it reads "in_stock" on
 # out-of-stock products — see RESEARCH.md §4c).
-_PRODUCT_FIELDS = "id name urlPart isInStock isSellable"
+#
+# `additionalInfo` carries the store's spec table — "Age Range", "Pieces",
+# "Set No." — and costs nothing extra: it comes back in the bulk list query, so
+# piece counts add zero requests to a scan.
+_PRODUCT_FIELDS = (
+    "id name urlPart isInStock isSellable additionalInfo { title description }"
+)
+
+# Values arrive as HTML fragments, and the store is inconsistent about the
+# wrapper: <p>757</p>, <div>2912</div> and <span>…</span> all occur. One entry
+# uses a thousands separator ("2,532").
+_TAG_RE = re.compile(r"<[^>]+>")
+_PIECES_RE = re.compile(r"\d[\d,]*")
 
 _LIST_QUERY = """
 query($offset: Int!, $limit: Int!) {
@@ -70,6 +82,43 @@ class BrickBorrowError(RuntimeError):
     """Any failure talking to the store. Callers treat this as 'try again later'."""
 
 
+def _strip_html(value: str) -> str:
+    return _TAG_RE.sub("", value or "").replace("&nbsp;", " ").strip()
+
+
+def parse_pieces(additional_info: Optional[list]) -> Optional[int]:
+    """Pull the piece count out of the store's spec table.
+
+    Returns None rather than guessing when the value isn't a plain number — the
+    gift card and mystery box list "01-3000+", which is a range, not a count.
+    A wrong piece count is worse than an absent one.
+    """
+    for entry in additional_info or []:
+        title = (entry.get("title") or "").strip().lower()
+        if not title.startswith("piece"):
+            continue
+        text = _strip_html(entry.get("description") or "")
+        # Reject anything that isn't purely a number: "01-3000+" must not
+        # silently become 1.
+        if not re.fullmatch(r"[\d,]+", text):
+            return None
+        match = _PIECES_RE.search(text)
+        if not match:
+            return None
+        try:
+            return int(match.group(0).replace(",", ""))
+        except ValueError:
+            return None
+    return None
+
+
+def format_pieces(pieces: Optional[int]) -> str:
+    """Human-readable piece count, or empty string when unknown."""
+    if pieces is None:
+        return ""
+    return f"{pieces:,} pcs"
+
+
 @dataclass(frozen=True)
 class Product:
     id: str
@@ -77,6 +126,7 @@ class Product:
     url_part: str
     is_in_stock: bool
     is_sellable: bool
+    pieces: Optional[int] = None
 
     @property
     def available(self) -> bool:
@@ -91,6 +141,10 @@ class Product:
     def url(self) -> str:
         return f"{SITE}/product-page/{self.url_part}"
 
+    @property
+    def pieces_label(self) -> str:
+        return format_pieces(self.pieces)
+
     @classmethod
     def from_api(cls, raw: dict) -> "Product":
         return cls(
@@ -99,6 +153,7 @@ class Product:
             url_part=raw.get("urlPart") or "",
             is_in_stock=bool(raw.get("isInStock")),
             is_sellable=bool(raw.get("isSellable")),
+            pieces=parse_pieces(raw.get("additionalInfo")),
         )
 
 

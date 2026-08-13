@@ -81,6 +81,7 @@ class App:
                     available=product.available,
                     name=product.name,
                     url_part=product.url_part,
+                    pieces=product.pieces,
                     notified=item.product_id in notified_ids,
                 )
 
@@ -119,7 +120,10 @@ class App:
             lines.append(f"🟢 <b>{len(available)} of your sets are available now</b>")
             lines.append("")
             for _, product in available:
-                lines.append(f'• <a href="{esc(product.url)}">{esc(product.name)}</a>')
+                suffix = f" · {product.pieces_label}" if product.pieces_label else ""
+                lines.append(
+                    f'• <a href="{esc(product.url)}">{esc(product.name)}</a>{suffix}'
+                )
         else:
             lines.append("🔴 None of your tracked sets are available right now.")
 

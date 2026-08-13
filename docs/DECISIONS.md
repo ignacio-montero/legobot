@@ -4,6 +4,36 @@ Newest first. Each entry: what was decided, why, and what was rejected.
 
 ---
 
+## 2026-08-13 — Show piece counts, sourced from `additionalInfo`
+
+**Decision.** Read the store's spec table (`additionalInfo`) and surface the
+piece count in `/list`, `/add`, `/search`, `/check` and availability alerts.
+
+**Why it's free.** `additionalInfo` is returned by the **bulk list query**, not
+just the single-product one, so this adds **zero requests** per scan. Every one
+of the 1,127 products carries "Age Range", "Pieces" and "Set No.".
+
+**Parsing.** Values are HTML fragments and the store is inconsistent: `<p>757</p>`,
+`<div>2912</div>` and `<span>…</span> ` all occur, and one entry uses a thousands
+separator (`2,532`). The parser strips tags and accepts only a pure number.
+
+**The deliberate refusal:** the Gift Card and Mystery Box list `01-3000+`, a
+*range*. A naive `\d+` regex would report "1 piece". The parser rejects anything
+that isn't wholly numeric and returns None, and the UI omits the count entirely.
+**An absent piece count is much better than a confidently wrong one.**
+
+**Storage.** Cached in SQLite so `/list` is instant and works offline, refreshed
+on every scan. `record_scan` ignores a None so a transient malformed spec table
+can't blank a count already known.
+
+**Schema migration.** The bot was already deployed with a live database, and
+`CREATE TABLE IF NOT EXISTS` does nothing to an existing table. Added a minimal
+idempotent migration (`PRAGMA table_info` → `ALTER TABLE … ADD COLUMN`) that runs
+at startup, with a test that opens a pre-migration DB and asserts existing rows
+survive.
+
+---
+
 ## 2026-08-13 — Poll every 10 minutes, not 30
 
 **Decision.** Default `POLL_INTERVAL_MINUTES` is 10. 5 is also safe.

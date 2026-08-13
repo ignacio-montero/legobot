@@ -172,13 +172,18 @@ class CommandHandler:
                 )
                 continue
 
-            if self.store.add(product.id, product.url_part, product.name):
+            if self.store.add(
+                product.id, product.url_part, product.name, product.pieces
+            ):
                 added += 1
                 mark = "🟢 available right now" if product.available else "🔴 not available yet"
-                lines.append(f"✅ <b>{esc(product.name)}</b>\n   {mark}")
+                detail = f"{product.pieces_label} · {mark}" if product.pieces_label else mark
+                lines.append(f"✅ <b>{esc(product.name)}</b>\n   {detail}")
                 # Seed the state so the first scan doesn't re-announce something
                 # we just told them about.
-                self.store.record_scan(product.id, available=product.available)
+                self.store.record_scan(
+                    product.id, available=product.available, pieces=product.pieces
+                )
             else:
                 lines.append(f"• <b>{esc(product.name)}</b> — already tracking")
 
@@ -211,7 +216,10 @@ class CommandHandler:
         for product in results:
             mark = "🟢" if product.available else "🔴"
             tracked = " · <i>tracked</i>" if self.store.get(product.id) else ""
-            lines.append(f'{mark} <a href="{esc(product.url)}">{esc(product.name)}</a>{tracked}')
+            suffix = f" · {product.pieces_label}" if product.pieces_label else ""
+            lines.append(
+                f'{mark} <a href="{esc(product.url)}">{esc(product.name)}</a>{suffix}{tracked}'
+            )
             lines.append(f"   <code>/add {esc(product.url)}</code>")
         return "\n".join(lines)
 
@@ -229,6 +237,13 @@ class CommandHandler:
             else:
                 mark = "🔴"
             lines.append(f'{index}. {mark} <a href="{esc(item.url)}">{esc(item.name)}</a>')
+            if item.pieces_label:
+                lines.append(f"    <i>{item.pieces_label}</i>")
+
+        known = [i.pieces for i in tracked if i.pieces is not None]
+        if known:
+            lines.append("")
+            lines.append(f"<i>{sum(known):,} pieces across {len(known)} set(s).</i>")
         lines.append("")
         lines.append("<i>Status is from the last check.</i> /check to refresh now.")
         if self.store.paused:
