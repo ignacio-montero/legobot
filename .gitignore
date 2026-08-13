@@ -8,3 +8,6 @@ venv/
 *.sqlite3-shm
 .pytest_cache/
 data/
+
+# macOS cruft
+.DS_Store

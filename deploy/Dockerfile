@@ -29,9 +29,15 @@ COPY src/ ./src/
 
 # Run as a non-root user. If the process is ever compromised it lands as `bot`,
 # not root, and it cannot write anywhere except the data volume.
+#
+# Note that /app stays owned by root and is only READABLE by `bot`. Only /data
+# is writable. That means a compromised process cannot rewrite its own source
+# to persist across a restart — the code it runs next boot is whatever the
+# image says it is. Chowning /app to the run user is a common reflex and it
+# quietly gives that property away.
 RUN useradd --create-home --uid 10001 bot \
     && mkdir -p /data \
-    && chown -R bot:bot /data /app
+    && chown -R bot:bot /data
 USER bot
 
 ENV PYTHONPATH=/app/src \
