@@ -121,3 +121,60 @@ def test_migration_adds_pieces_to_a_pre_existing_database(tmp_path):
     s.close()
 
     Store(path).close()                  # idempotent: re-opening must not fail
+
+
+# ---------------- announced flag ----------------
+
+
+def test_announced_defaults_false_and_round_trips(store):
+    store.add("p1", "s", "N")
+    assert store.get("p1").announced is False
+    store.record_scan("p1", available=True, announced=True)
+    assert store.get("p1").announced is True
+    store.record_scan("p1", available=False, announced=False)
+    assert store.get("p1").announced is False
+
+
+def test_announced_left_alone_when_not_passed(store):
+    store.add("p1", "s", "N")
+    store.record_scan("p1", available=True, announced=True)
+    store.record_scan("p1", available=True)  # no announced kwarg
+    assert store.get("p1").announced is True
+
+
+def test_migration_backfills_announced_for_already_alerted_sets(tmp_path):
+    """The live DB had a set flagged available+notified before this column existed.
+
+    Without the backfill it would never produce a "gone again" message.
+    """
+    import sqlite3
+
+    path = str(tmp_path / "v2.sqlite3")
+    old = sqlite3.connect(path)
+    old.executescript(
+        """
+        CREATE TABLE tracked (
+            product_id TEXT PRIMARY KEY, url_part TEXT NOT NULL, name TEXT NOT NULL,
+            added_at INTEGER NOT NULL, last_available INTEGER,
+            last_seen_at INTEGER, notified_at INTEGER, pieces INTEGER
+        );
+        CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        -- available AND already alerted -> should be backfilled to announced
+        INSERT INTO tracked VALUES ('mona','mona','Mona Lisa',1,1,1,1786695034,1503);
+        -- available but never alerted -> must stay unannounced
+        INSERT INTO tracked VALUES ('quiet','q','Quiet Set',1,1,1,NULL,100);
+        -- unavailable -> must stay unannounced
+        INSERT INTO tracked VALUES ('gone','g','Gone Set',1,0,1,1786695034,200);
+        """
+    )
+    old.commit()
+    old.close()
+
+    s = Store(path)
+    assert s.get("mona").announced is True
+    assert s.get("quiet").announced is False
+    assert s.get("gone").announced is False
+    assert s.get("mona").pieces == 1503     # earlier migration preserved
+    s.close()
+
+    Store(path).close()                      # idempotent

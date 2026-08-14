@@ -4,6 +4,43 @@ Newest first. Each entry: what was decided, why, and what was rejected.
 
 ---
 
+## 2026-08-14 — "Gone again" alerts, gated by an `announced` flag
+
+**The question.** If a set is announced as available and not acted on, does the
+bot keep notifying every scan? **No** — it never did; that is the edge-triggered
+design, and it is what was observed with Mona Lisa. But the requested other half,
+telling you when it is taken again, was **computed and then thrown away**:
+`evaluate_scan` had produced `became_unavailable` since day one and
+`_send_alerts` simply never rendered it.
+
+**Decision.** Send a 🔴 "Gone again" alert on the available→unavailable edge, so
+each availability cycle produces exactly two messages and nothing in between.
+
+**The subtlety — why a new `announced` column.** The naive version notifies on
+every downward edge, which produces "X is no longer available" for a set you were
+never told had become available. That happens in two real cases: a set that
+freed up and was taken while the bot was **paused**, and the first scan after
+adding a set. So the alert is gated on `announced` — "the user has been told this
+set is currently available" — which is set when we push an alert *and* when a
+command reply lists it (`/check`, `/available`, `/resume` all inform without
+pushing). It clears the moment the set goes unavailable, re-arming both alerts.
+
+**Rule this encodes:** never announce the end of something you never announced
+the start of.
+
+**Migration.** Second schema migration, and the first with a **data backfill**:
+`UPDATE tracked SET announced = 1 WHERE last_available = 1 AND notified_at IS
+NOT NULL`. Without it, the set already flagged available in the live database
+would have gone quiet forever instead of reporting its removal. Schema migration
+and data migration are separate jobs; this one needed both.
+
+**Testing.** Added `tests/test_app_lifecycle.py`, which drives the real
+`App.apply_catalog` with a stub Telegram and asserts the full cycle sends
+**exactly two** messages across eleven scans — the unit tests pin the pure
+function, this pins what actually gets sent.
+
+---
+
 ## 2026-08-14 — Any fresh catalogue feeds the notifier; poll every 5 min
 
 **The report.** A tracked set (Mona Lisa) was seen as available via `/available`

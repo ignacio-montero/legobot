@@ -21,6 +21,21 @@ storefront catalog API and compares each tracked set against what it saw last
 time. When one flips from unavailable to available, you get a message — **once**
 per transition, not every cycle.
 
+You get exactly two messages per availability cycle:
+
+```
+🟢 Available now              …then silence while it stays free…
+LEGO® (31213) Art Mona Lisa
+1,503 pcs
+
+🔴 Gone again                 …then silence until it returns.
+LEGO® (31213) Art Mona Lisa
+Someone else took it. Still tracking — I'll tell you if it returns.
+```
+
+The "gone again" message only fires for sets I actually told you about, so you
+are never notified that something ended which you were never told had started.
+
 Piece counts come along for free: the store's spec table ("Age Range", "Pieces",
 "Set No.") is returned by the same bulk query, so showing them costs zero extra
 requests.

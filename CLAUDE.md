@@ -13,7 +13,7 @@ counter-intuitive enough that you will otherwise "fix" working code.
 ## Current state (2026-08-13)
 
 **Deployed and running** on the homelab as `@LEGOBorrowBot`, image
-`ghcr.io/ignacio-montero/legobot:0.4.0`. 88 tests passing. Polls every 5 min,
+`ghcr.io/ignacio-montero/legobot:0.5.0`. 99 tests passing. Polls every 5 min,
 07:00–19:00 Europe/London.
 
 ⚠️ **Every fresh catalogue must feed `App.apply_catalog`.** `/available` once
@@ -27,6 +27,11 @@ with `--platform linux/amd64`.
 
 ⚠️ Only ONE process may long-poll the bot token. The container is using it, so
 do not run the bot locally without stopping it first.
+
+⚠️ **The `announced` flag is not the same as `last_available`.** It means "the
+user has been told this is available" and gates the 🔴 gone-again alert, so we
+never announce an ending we didn't announce the start of. Commands that report
+availability in their reply must pass `inform=True`.
 
 ## The two things that will trip you up
 

@@ -29,6 +29,7 @@ from .scanner import (
     evaluate_scan,
     next_scan_delay,
     render_available_alert,
+    render_gone_alert,
     render_rename_alert,
     render_vanished_alert,
     within_active_hours,
@@ -59,7 +60,9 @@ class App:
     def _now(self) -> datetime:
         return datetime.now(self.config.timezone)
 
-    async def apply_catalog(self, products: list, *, notify: bool) -> ScanOutcome:
+    async def apply_catalog(
+        self, products: list, *, notify: bool, inform: Optional[bool] = None
+    ) -> ScanOutcome:
         """Fold a catalogue snapshot into tracked state, and optionally alert.
 
         Every code path that obtains a fresh catalogue funnels through here — the
@@ -67,7 +70,15 @@ class App:
         this existed, /available fetched live data and threw it away, so browsing
         could reveal a set as available while the notifier, still on its 10-minute
         cadence, had not yet reacted. Any fresh catalogue is now acted upon.
+
+        `notify` sends push alerts. `inform` means "the user is being told about
+        available sets right now" — true for a push, but also true for /check and
+        /available, whose replies list them. It's what gates the later "gone
+        again" message, so we only announce an ending we announced the start of.
+        Defaults to `notify`.
         """
+        if inform is None:
+            inform = notify
         async with self._scan_lock:
             tracked = self.store.list_tracked()
             if not tracked:
@@ -84,7 +95,17 @@ class App:
                 if notify
                 else set()
             )
+            # "Gone again" only for sets the user was actually told about.
+            outcome.gone_announced = [
+                (item, product)
+                for item, product in outcome.became_unavailable
+                if item.announced
+            ]
+
             for item, product in outcome.seen:
+                # Announced stays true for as long as the set remains available,
+                # and is cleared the moment it isn't — which re-arms both alerts.
+                announced = product.available and (inform or item.announced)
                 self.store.record_scan(
                     item.product_id,
                     available=product.available,
@@ -92,6 +113,7 @@ class App:
                     url_part=product.url_part,
                     pieces=product.pieces,
                     notified=item.product_id in notified_ids,
+                    announced=announced,
                 )
 
             self._last_scan_at = self._now()
@@ -101,19 +123,23 @@ class App:
                 await self._send_alerts(outcome)
             return outcome
 
-    async def _run_scan(self, *, notify: bool) -> ScanOutcome:
+    async def _run_scan(
+        self, *, notify: bool, inform: Optional[bool] = None
+    ) -> ScanOutcome:
         """Fetch a fresh catalogue and apply it. The timed scan's entry point."""
         if not self.store.count_tracked():
             self._last_scan_at = self._now()
             return ScanOutcome()
         products = await self.client.fetch_catalog()
-        return await self.apply_catalog(products, notify=notify)
+        return await self.apply_catalog(products, notify=notify, inform=inform)
 
     async def _send_alerts(self, outcome: ScanOutcome) -> None:
         if outcome.became_available:
             await self.telegram.send(
                 render_available_alert(outcome.became_available), disable_preview=False
             )
+        if outcome.gone_announced:
+            await self.telegram.send(render_gone_alert(outcome.gone_announced))
         if outcome.renamed:
             await self.telegram.send(render_rename_alert(outcome.renamed))
         if outcome.vanished:
@@ -122,7 +148,8 @@ class App:
     async def _scan_and_report(self) -> str:
         """A scan whose result is reported back as a chat reply (for /check, /resume)."""
         try:
-            outcome = await self._run_scan(notify=False)
+            # inform=True: the reply lists what's available, so the user is told.
+            outcome = await self._run_scan(notify=False, inform=True)
         except BrickBorrowError as exc:
             self._last_scan_error = str(exc)
             log.warning("manual scan failed: %s", exc)

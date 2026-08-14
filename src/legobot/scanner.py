@@ -28,6 +28,9 @@ class ScanOutcome:
     renamed: list[tuple[TrackedSet, Product]] = field(default_factory=list)
     vanished: list[TrackedSet] = field(default_factory=list)
     seen: list[tuple[TrackedSet, Product]] = field(default_factory=list)
+    # Subset of became_unavailable that we had actually announced. Filled by the
+    # app, which is the only layer that knows what was communicated.
+    gone_announced: list[tuple[TrackedSet, Product]] = field(default_factory=list)
 
     @property
     def has_alerts(self) -> bool:
@@ -124,6 +127,33 @@ def render_available_alert(pairs: list[tuple[TrackedSet, Product]]) -> str:
     for _, product in pairs:
         suffix = f" · {product.pieces_label}" if product.pieces_label else ""
         lines.append(f'• <a href="{esc(product.url)}">{esc(product.name)}</a>{suffix}')
+    return "\n".join(lines)
+
+
+def render_gone_alert(pairs: list[tuple[TrackedSet, Product]]) -> str:
+    """Closes the loop on an alert you didn't act on.
+
+    Only sent for sets we actually announced as available (see TrackedSet
+    .announced) — telling you something ended that you were never told had
+    started is just noise.
+    """
+    from .telegram import esc
+
+    if len(pairs) == 1:
+        _, product = pairs[0]
+        detail = f"\n{product.pieces_label}" if product.pieces_label else ""
+        return (
+            "🔴 <b>Gone again</b>\n\n"
+            f"<b>{esc(product.name)}</b>{detail}\n"
+            "Someone else took it. Still tracking — I'll tell you if it returns."
+        )
+
+    lines = [f"🔴 <b>{len(pairs)} sets are no longer available</b>", ""]
+    for _, product in pairs:
+        suffix = f" · {product.pieces_label}" if product.pieces_label else ""
+        lines.append(f"• {esc(product.name)}{suffix}")
+    lines.append("")
+    lines.append("Still tracking them — I'll tell you if they return.")
     return "\n".join(lines)
 
 

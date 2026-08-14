@@ -290,3 +290,67 @@ def test_format_pieces_uses_thousands_separators_and_tolerates_none():
     assert format_pieces(10001) == "10,001 pcs"
     assert format_pieces(757) == "757 pcs"
     assert format_pieces(None) == ""
+
+
+# ---------------- the full availability lifecycle ----------------
+#
+# The behaviour the owner asked for: tell me ONCE when a set frees up, stay
+# quiet while it stays free, then tell me ONCE when it's taken again.
+
+from legobot.scanner import render_gone_alert  # noqa: E402
+
+
+def lifecycle_step(last_available, announced, now_available):
+    """Run one scan step and return (became_available, gone_announced)."""
+    item = TrackedSet(
+        product_id="p1", url_part="u", name="Set", added_at=0,
+        last_available=last_available, last_seen_at=None, notified_at=None,
+        pieces=500, announced=announced,
+    )
+    catalog = {"p1": make_product(available=now_available)}
+    outcome = evaluate_scan([item], catalog)
+    gone = [(i, p) for i, p in outcome.became_unavailable if i.announced]
+    return outcome.became_available, gone
+
+
+def test_lifecycle_alerts_once_then_stays_silent_then_alerts_on_removal():
+    # 1. unavailable -> available: alert
+    became, gone = lifecycle_step(False, False, True)
+    assert len(became) == 1 and not gone
+
+    # 2. still available, already announced: silence (this is what you saw
+    #    with Mona Lisa — no repeat every scan)
+    became, gone = lifecycle_step(True, True, True)
+    assert not became and not gone
+
+    # 3. taken by someone else: alert once
+    became, gone = lifecycle_step(True, True, False)
+    assert not became and len(gone) == 1
+
+    # 4. still unavailable: silence, and the cycle is re-armed
+    became, gone = lifecycle_step(False, False, False)
+    assert not became and not gone
+
+    # 5. comes back: alerts again
+    became, gone = lifecycle_step(False, False, True)
+    assert len(became) == 1
+
+
+def test_gone_alert_suppressed_when_we_never_announced_it():
+    """Don't announce the end of something you never announced the start of."""
+    _, gone = lifecycle_step(True, False, False)
+    assert gone == []
+
+
+def test_gone_alert_wording_mentions_it_is_still_tracked():
+    item = TrackedSet("p1", "u", "Mona Lisa", 0, True, None, None, 1503, True)
+    text = render_gone_alert([(item, make_product(name="Mona Lisa", available=False))])
+    assert "Gone again" in text
+    assert "still tracking" in text.lower()
+
+
+def test_gone_alert_batches_multiple_sets():
+    item = TrackedSet("p1", "u", "A", 0, True, None, None, 100, True)
+    pairs = [(item, make_product(name=f"Set {i}", available=False)) for i in range(3)]
+    text = render_gone_alert(pairs)
+    assert "3 sets are no longer available" in text

@@ -56,16 +56,24 @@ def build(store, client, **kw):
 
     calls = []
 
-    async def apply_catalog(products, *, notify):
+    async def apply_catalog(products, *, notify, inform=None):
         """Mimics App.apply_catalog: persist state, report what's tracked."""
         from legobot.brickborrow import index_by_id
         from legobot.scanner import evaluate_scan
 
-        calls.append({"count": len(products), "notify": notify})
+        if inform is None:
+            inform = notify
+        calls.append({"count": len(products), "notify": notify, "inform": inform})
         outcome = evaluate_scan(store.list_tracked(), index_by_id(products))
+        outcome.gone_announced = [
+            (i, p) for i, p in outcome.became_unavailable if i.announced
+        ]
         for item, product in outcome.seen:
             store.record_scan(
-                item.product_id, available=product.available, pieces=product.pieces
+                item.product_id,
+                available=product.available,
+                pieces=product.pieces,
+                announced=product.available and (inform or item.announced),
             )
         return outcome
 

@@ -59,8 +59,12 @@ reply with the <i>real</i> set name so you can check. When in doubt use /search.
 /resume — start again, and I'll tell you what's available right now
 /status — current state
 
-I only notify you when a set <i>changes</i> from unavailable to available, so \
-you won't get the same alert twice.
+<b>What I'll message you</b>
+🟢 once, when a tracked set becomes available
+🔴 once, when it's taken again (so you know you missed it)
+
+I never repeat the same alert — you'll only hear from me when something \
+actually <i>changes</i>.
 """
 
 
@@ -341,7 +345,9 @@ class CommandHandler:
         yours_available: list = []
         if self.apply_catalog is not None:
             try:
-                outcome = await self.apply_catalog(catalog, notify=False)
+                # inform=True: the reply below pins your available sets, so you
+                # ARE being told — which is what licenses a later "gone again".
+                outcome = await self.apply_catalog(catalog, notify=False, inform=True)
                 yours_available = [p for _, p in outcome.seen if p.available]
             except Exception:  # noqa: BLE001 - browsing must not fail on a state error
                 log.exception("could not apply catalogue during /available")

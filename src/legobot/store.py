@@ -46,7 +46,21 @@ CREATE TABLE IF NOT EXISTS meta (
 # if the column is absent, which makes startup idempotent: safe to run against a
 # fresh DB, a half-migrated one, or an already-migrated one.
 MIGRATIONS = [
-    ("tracked", "pieces", "ALTER TABLE tracked ADD COLUMN pieces INTEGER"),
+    ("tracked", "pieces", ["ALTER TABLE tracked ADD COLUMN pieces INTEGER"]),
+    (
+        "tracked",
+        "announced",
+        [
+            "ALTER TABLE tracked ADD COLUMN announced INTEGER NOT NULL DEFAULT 0",
+            # Backfill: a set that is available right now AND that we already
+            # alerted about is, by definition, announced. Without this, sets
+            # already flagged before the upgrade would never produce a "gone"
+            # notification. Migrating the schema and migrating the *data* are
+            # two different jobs.
+            "UPDATE tracked SET announced = 1 "
+            "WHERE last_available = 1 AND notified_at IS NOT NULL",
+        ],
+    ),
 ]
 
 
@@ -60,6 +74,10 @@ class TrackedSet:
     last_seen_at: Optional[int]
     notified_at: Optional[int]
     pieces: Optional[int] = None
+    # "The user has been told this set is currently available" — by push alert or
+    # by a command reply. Gates the "no longer available" message so we never
+    # announce the end of something we never announced the start of.
+    announced: bool = False
 
     @property
     def url(self) -> str:
@@ -81,6 +99,7 @@ def _row_to_tracked(row: sqlite3.Row) -> TrackedSet:
         last_seen_at=row["last_seen_at"],
         notified_at=row["notified_at"],
         pieces=row["pieces"] if "pieces" in row.keys() else None,
+        announced=bool(row["announced"]) if "announced" in row.keys() else False,
     )
 
 
@@ -101,14 +120,15 @@ class Store:
 
     def _migrate(self) -> None:
         """Bring an existing database up to the current schema."""
-        for table, column, statement in MIGRATIONS:
+        for table, column, statements in MIGRATIONS:
             existing = {
                 row["name"]
                 for row in self._conn.execute(f"PRAGMA table_info({table})").fetchall()
             }
             if column not in existing:
                 log.info("migrating: adding %s.%s", table, column)
-                self._conn.execute(statement)
+                for statement in statements:
+                    self._conn.execute(statement)
 
     def close(self) -> None:
         self._conn.close()
@@ -161,6 +181,7 @@ class Store:
         url_part: Optional[str] = None,
         pieces: Optional[int] = None,
         notified: bool = False,
+        announced: Optional[bool] = None,
     ) -> None:
         now = int(time.time())
         sets = ["last_available = ?", "last_seen_at = ?"]
@@ -176,6 +197,9 @@ class Store:
             # briefly malformed doesn't blank a count we already knew.
             sets.append("pieces = ?")
             args.append(pieces)
+        if announced is not None:
+            sets.append("announced = ?")
+            args.append(1 if announced else 0)
         if notified:
             sets.append("notified_at = ?")
             args.append(now)
