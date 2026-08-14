@@ -4,6 +4,51 @@ Newest first. Each entry: what was decided, why, and what was rejected.
 
 ---
 
+## 2026-08-14 — Any fresh catalogue feeds the notifier; poll every 5 min
+
+**The report.** A tracked set (Mona Lisa) was seen as available via `/available`
+at 09:02, but no notification arrived at that moment.
+
+**What actually happened.** The notifier was working. Timeline from the logs and
+the database:
+
+| Time | Event |
+|---|---|
+| 09:00:32 | scheduled scan — Mona Lisa **not** available |
+| ~09:01 | it became available |
+| 09:02:39 | `/available` run by hand — shows it as available |
+| 09:10:34 | scheduled scan — edge detected, **notification sent** (`notified_at=09:10:34`, zero send failures in the logs) |
+
+So this was an **8-minute observation window**, not a lost notification: a
+manual browse read live data while the notifier was still on its cadence.
+
+**The real defect, though, is that the window existed at all.** `/available`
+fetched a complete fresh catalogue — exactly the data a scan needs — and then
+**threw it away**. Having the answer in hand and not acting on it is the bug.
+
+**Fix 1: every fresh catalogue feeds the state machine.** Extracted
+`App.apply_catalog(products, notify=)`; the timed scan, `/check`, `/resume` and
+`/available` all funnel through it. Browsing can no longer reveal something the
+notifier hasn't reacted to.
+
+`/available` applies with `notify=False` deliberately: the reply itself now pins
+your tracked-and-available sets at the top, so you are being told *right there*,
+and a duplicate push a second later would be noise. Consuming the edge is
+correct precisely because the user was informed.
+
+**Fix 2: tracked sets are pinned above the ranking.** Previously they were only
+ticked ✅ inline, so a tracked set ranking below the display limit was invisible.
+The whole point of the bot must never be buried by a piece-count sort.
+
+**Fix 3: poll every 5 minutes, not 10.** Halves the worst-case delay. Safe on
+the evidence already gathered (60 back-to-back requests → 60× HTTP 200, no
+throttling; responses are `no-cache` so faster polling reads fresher data).
+~1,700 requests/day, still ~1/minute averaged.
+
+**Not changed:** the edge-triggered design. It behaved exactly as specified.
+
+---
+
 ## 2026-08-13 — `/available`: catalogue-wide discovery, ranked by pieces
 
 **Decision.** New command listing every borrowable set in the catalogue, sorted

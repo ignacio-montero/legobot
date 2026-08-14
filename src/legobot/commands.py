@@ -8,7 +8,7 @@ the BrickBorrow client.
 from __future__ import annotations
 
 import logging
-from typing import Awaitable, Callable
+from typing import Awaitable, Callable, Optional
 
 from .brickborrow import BrickBorrowClient, BrickBorrowError, extract_slugs, slug_from_url
 from .store import Store
@@ -77,6 +77,7 @@ class CommandHandler:
         tz_name: str,
         trigger_scan: Callable[[], Awaitable[str]],
         status_report: Callable[[], Awaitable[str]],
+        apply_catalog: Optional[Callable[..., Awaitable]] = None,
     ) -> None:
         self.store = store
         self.client = client
@@ -87,6 +88,9 @@ class CommandHandler:
         self.tz_name = tz_name
         self.trigger_scan = trigger_scan
         self.status_report = status_report
+        # Lets /available fold its fresh catalogue into tracked state. Optional
+        # so the handler stays constructible in tests without the whole App.
+        self.apply_catalog = apply_catalog
 
     async def handle(self, text: str) -> str:
         text = (text or "").strip()
@@ -326,6 +330,22 @@ class CommandHandler:
             log.warning("available listing failed: %s", exc)
             return "Couldn't reach the store just now — try again in a minute."
 
+        # Feed this fresh snapshot into the tracked-set state machine before
+        # rendering anything. Otherwise browsing could show a tracked set as
+        # available while the notifier, on its own cadence, hadn't reacted yet —
+        # you'd see it here minutes before being told about it.
+        #
+        # notify=False because the reply below pins your tracked sets at the top:
+        # you are being told right now, and a duplicate push a second later is
+        # noise. Consuming the edge here is therefore correct, not a loss.
+        yours_available: list = []
+        if self.apply_catalog is not None:
+            try:
+                outcome = await self.apply_catalog(catalog, notify=False)
+                yours_available = [p for _, p in outcome.seen if p.available]
+            except Exception:  # noqa: BLE001 - browsing must not fail on a state error
+                log.exception("could not apply catalogue during /available")
+
         available = [p for p in catalog if p.available]
         # Ranked by piece count, so anything without one (the gift card and the
         # mystery box, which aren't sets) has no place in this view.
@@ -340,11 +360,28 @@ class CommandHandler:
         tracked_ids = {t.product_id for t in self.store.list_tracked()}
         shown = ranked[:limit]
 
-        header = (
+        lines: list[str] = []
+        if yours_available:
+            # These are the whole point of the bot, so they go first and are never
+            # hidden by the piece-count ranking or the display limit.
+            lines.append(f"⭐️ <b>{len(yours_available)} set(s) you track are available</b>")
+            lines.append("")
+            for product in sorted(
+                yours_available, key=lambda p: p.pieces or 0, reverse=True
+            ):
+                suffix = f" · {product.pieces_label}" if product.pieces_label else ""
+                lines.append(
+                    f'• <a href="{esc(product.url)}">{esc(product.name)}</a>{suffix}'
+                )
+            lines.append("")
+            lines.append("———")
+            lines.append("")
+
+        lines.append(
             f"🟢 <b>{len(available)} sets available now</b> — "
             f"top {len(shown)} by piece count"
         )
-        lines = [header, ""]
+        lines.append("")
         for index, product in enumerate(shown, start=1):
             mark = " ✅" if product.id in tracked_ids else ""
             lines.append(

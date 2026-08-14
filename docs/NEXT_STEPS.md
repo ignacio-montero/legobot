@@ -27,6 +27,13 @@ alerts, at zero extra request cost (they ride along in the existing bulk query).
 ⚠️ **Sets added before v0.2.0 show no count until the next scan populates them.**
 Send `/check` to fill them in immediately rather than waiting for 07:00.
 
+## v0.4.0 — closing the browse/notify window (2026-08-14)
+
+`/available` now folds its own catalogue fetch into tracked state and pins your
+available sets at the top of the reply, and polling tightened to 5 minutes.
+Background: a set was spotted via `/available` 8 minutes before the scheduled
+scan reported it. The notification did fire correctly — see `docs/DECISIONS.md`.
+
 ## Using it
 
 Message **@LEGOBorrowBot** on Telegram. Paste a Brick Borrow product link to

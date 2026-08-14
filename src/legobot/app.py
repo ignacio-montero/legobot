@@ -59,8 +59,15 @@ class App:
     def _now(self) -> datetime:
         return datetime.now(self.config.timezone)
 
-    async def _run_scan(self, *, notify: bool) -> ScanOutcome:
-        """One catalog sweep. Serialised so /check and the timer can't overlap."""
+    async def apply_catalog(self, products: list, *, notify: bool) -> ScanOutcome:
+        """Fold a catalogue snapshot into tracked state, and optionally alert.
+
+        Every code path that obtains a fresh catalogue funnels through here — the
+        timed scan, /check, /resume and /available alike. That matters: before
+        this existed, /available fetched live data and threw it away, so browsing
+        could reveal a set as available while the notifier, still on its 10-minute
+        cadence, had not yet reacted. Any fresh catalogue is now acted upon.
+        """
         async with self._scan_lock:
             tracked = self.store.list_tracked()
             if not tracked:
@@ -68,13 +75,15 @@ class App:
                 self._last_scan_error = None
                 return ScanOutcome()
 
-            products = await self.client.fetch_catalog()
-            catalog = index_by_id(products)
-            outcome = evaluate_scan(tracked, catalog)
+            outcome = evaluate_scan(tracked, index_by_id(products))
 
             # Persist first, notify second. If sending fails we'd rather drop a
             # message than re-fire the same alert on every subsequent scan.
-            notified_ids = {item.product_id for item, _ in outcome.became_available}
+            notified_ids = (
+                {item.product_id for item, _ in outcome.became_available}
+                if notify
+                else set()
+            )
             for item, product in outcome.seen:
                 self.store.record_scan(
                     item.product_id,
@@ -91,6 +100,14 @@ class App:
             if notify:
                 await self._send_alerts(outcome)
             return outcome
+
+    async def _run_scan(self, *, notify: bool) -> ScanOutcome:
+        """Fetch a fresh catalogue and apply it. The timed scan's entry point."""
+        if not self.store.count_tracked():
+            self._last_scan_at = self._now()
+            return ScanOutcome()
+        products = await self.client.fetch_catalog()
+        return await self.apply_catalog(products, notify=notify)
 
     async def _send_alerts(self, outcome: ScanOutcome) -> None:
         if outcome.became_available:
@@ -275,6 +292,7 @@ class App:
                 tz_name=self.config.tz_name,
                 trigger_scan=self._scan_and_report,
                 status_report=self._status_report,
+                apply_catalog=self.apply_catalog,
             )
 
             await self.telegram.set_my_commands(COMMAND_MENU)

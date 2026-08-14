@@ -54,7 +54,22 @@ def build(store, client, **kw):
     async def status():
         return "status"
 
-    return CommandHandler(
+    calls = []
+
+    async def apply_catalog(products, *, notify):
+        """Mimics App.apply_catalog: persist state, report what's tracked."""
+        from legobot.brickborrow import index_by_id
+        from legobot.scanner import evaluate_scan
+
+        calls.append({"count": len(products), "notify": notify})
+        outcome = evaluate_scan(store.list_tracked(), index_by_id(products))
+        for item, product in outcome.seen:
+            store.record_scan(
+                item.product_id, available=product.available, pieces=product.pieces
+            )
+        return outcome
+
+    handler = CommandHandler(
         store,
         client,
         max_tracked=kw.get("max_tracked", 100),
@@ -64,7 +79,10 @@ def build(store, client, **kw):
         tz_name="Europe/London",
         trigger_scan=scan,
         status_report=status,
+        apply_catalog=None if kw.get("no_apply") else apply_catalog,
     )
+    handler.apply_calls = calls
+    return handler
 
 
 URL_A = "https://www.brickborrow.com/product-page/lego-1-set-a"
@@ -298,9 +316,14 @@ async def test_available_marks_sets_you_already_track(store):
     handler = build(store, FakeClient(catalogue()))
     await handler.handle("/add https://www.brickborrow.com/product-page/titanic")
     reply = await handler.handle("/available")
-    line = [ln for ln in reply.split("\n") if "Titanic" in ln][0]
-    assert "✅" in line
-    assert "✅" not in [ln for ln in reply.split("\n") if "Eiffel" in ln][0]
+
+    # Tracked sets are pinned at the top AND ticked in the ranking below, so
+    # assert against the numbered ranking specifically.
+    ranking = reply.split("sets available now", 1)[1]
+    titanic = [ln for ln in ranking.split("\n") if "Titanic" in ln][0]
+    eiffel = [ln for ln in ranking.split("\n") if "Eiffel" in ln][0]
+    assert "✅" in titanic
+    assert "✅" not in eiffel
 
 
 @pytest.mark.asyncio
@@ -350,3 +373,60 @@ async def test_available_aliases(store):
     handler = build(store, FakeClient(catalogue()))
     for alias in ("/avail", "/browse", "/top"):
         assert "Eiffel Tower" in await handler.handle(alias)
+
+
+# ---------------- /available feeds the notifier ----------------
+#
+# Regression: /available used to fetch a live catalogue and throw it away, so
+# browsing could reveal a tracked set as available minutes before the scheduled
+# scan reacted. Any fresh catalogue must now update tracked state.
+
+
+@pytest.mark.asyncio
+async def test_available_updates_tracked_state_from_its_own_fetch(store):
+    catalog = [product("mona", "Mona Lisa", "mona", available=False, pieces=1503)]
+    client = FakeClient(catalog)
+    handler = build(store, client)
+    await handler.handle("/add https://www.brickborrow.com/product-page/mona")
+    assert store.get("mona").last_available is False
+
+    # The set becomes available; the user browses before the next scheduled scan.
+    client.products["mona"] = product("mona", "Mona Lisa", "mona", available=True, pieces=1503)
+    await handler.handle("/available")
+
+    assert store.get("mona").last_available is True
+    assert handler.apply_calls[-1]["notify"] is False
+
+
+@pytest.mark.asyncio
+async def test_available_pins_your_tracked_sets_above_the_ranking(store):
+    """A tracked set must never be buried below the piece-count cutoff."""
+    catalog = [
+        product(f"big{i}", f"Huge Set {i}", f"big{i}", available=True, pieces=9000 - i)
+        for i in range(25)
+    ]
+    catalog.append(product("mona", "Mona Lisa", "mona", available=True, pieces=1503))
+    handler = build(store, FakeClient(catalog))
+    await handler.handle("/add https://www.brickborrow.com/product-page/mona")
+
+    reply = await handler.handle("/available")
+    assert "set(s) you track are available" in reply
+    # It appears before the catalogue-wide ranking, despite ranking ~26th.
+    assert reply.index("Mona Lisa") < reply.index("sets available now")
+
+
+@pytest.mark.asyncio
+async def test_available_has_no_pinned_section_when_none_of_yours_are_free(store):
+    catalog = [product("mona", "Mona Lisa", "mona", available=False, pieces=1503),
+               product("big", "Big Set", "big", available=True, pieces=5000)]
+    handler = build(store, FakeClient(catalog))
+    await handler.handle("/add https://www.brickborrow.com/product-page/mona")
+    reply = await handler.handle("/available")
+    assert "you track are available" not in reply
+    assert "Big Set" in reply
+
+
+@pytest.mark.asyncio
+async def test_available_still_works_without_the_hook(store):
+    handler = build(store, FakeClient(catalogue()), no_apply=True)
+    assert "Eiffel Tower" in await handler.handle("/available")

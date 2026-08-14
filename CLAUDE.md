@@ -13,8 +13,13 @@ counter-intuitive enough that you will otherwise "fix" working code.
 ## Current state (2026-08-13)
 
 **Deployed and running** on the homelab as `@LEGOBorrowBot`, image
-`ghcr.io/ignacio-montero/legobot:0.1.0`. 55 tests passing. Polls every 10 min,
+`ghcr.io/ignacio-montero/legobot:0.4.0`. 88 tests passing. Polls every 5 min,
 07:00–19:00 Europe/London.
+
+⚠️ **Every fresh catalogue must feed `App.apply_catalog`.** `/available` once
+fetched live data and discarded it, so browsing could reveal a set as available
+before the notifier reacted. If you add another command that fetches the
+catalogue, route it through `apply_catalog` too.
 
 ⚠️ This Mac runs **Colima**, not Docker Desktop — `colima start` if the docker
 socket is missing. Colima is ARM; the homelab is Intel, so always cross-build

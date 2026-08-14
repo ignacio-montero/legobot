@@ -16,7 +16,7 @@ Open on Brick Borrow →
 
 ## How it works
 
-Every 10 minutes between 07:00 and 19:00 UK time, it reads Brick Borrow's
+Every 5 minutes between 07:00 and 19:00 UK time, it reads Brick Borrow's
 storefront catalog API and compares each tracked set against what it saw last
 time. When one flips from unavailable to available, you get a message — **once**
 per transition, not every cycle.

@@ -17,14 +17,14 @@
 #    locally while the container is up — the second one gets HTTP 409.
 services:
   legobot:
-    image: ghcr.io/ignacio-montero/legobot:0.3.0   # pinned; bump to update
+    image: ghcr.io/ignacio-montero/legobot:0.4.0   # pinned; bump to update
     container_name: legobot
     restart: unless-stopped
     init: true                 # PID 1 that reaps zombies and forwards SIGTERM
     env_file: .env             # untracked on the server: TELEGRAM_BOT_TOKEN + _CHAT_ID
     environment:
       TZ: "Europe/London"      # makes the 07:00–19:00 window DST-correct
-      POLL_INTERVAL_MINUTES: "10"
+      POLL_INTERVAL_MINUTES: "5"
       ACTIVE_START: "07:00"
       ACTIVE_END: "19:00"
       LEGOBOT_DB_PATH: "/data/legobot.sqlite3"
