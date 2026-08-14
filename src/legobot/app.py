@@ -55,6 +55,8 @@ class App:
         self._last_scan_at: Optional[datetime] = None
         self._last_scan_error: Optional[str] = None
         self._scan_lock = asyncio.Lock()
+        self._last_fast_scan_at: Optional[datetime] = None
+        self._fast_scan_count = 0
 
     # ---------------- helpers ----------------
 
@@ -229,8 +231,22 @@ class App:
             f"Notifications: {'⏸ <b>paused</b>' if self.store.paused else '▶️ on'}",
             f"Window: {self.config.active_start:%H:%M}–{self.config.active_end:%H:%M} "
             f"{self.config.tz_name} ({'inside' if active else 'outside'} it now)",
-            f"Interval: every {self.config.poll_interval_minutes} min",
+            f"Interval: full sweep every {self.config.poll_interval_minutes} min",
         ]
+        if self.config.fast_tier_enabled:
+            if self._last_fast_scan_at:
+                lines.append(
+                    f"Fast check: every {self.config.fast_interval_seconds}s "
+                    f"(last {self._last_fast_scan_at:%H:%M:%S}, "
+                    f"{self._fast_scan_count} today)"
+                )
+            else:
+                lines.append(
+                    f"Fast check: every {self.config.fast_interval_seconds}s "
+                    "(not yet run)"
+                )
+        else:
+            lines.append("Fast check: <b>disabled</b>")
         if self._last_scan_at:
             lines.append(f"Last check: {self._last_scan_at:%H:%M on %d %b}")
         else:
@@ -298,8 +314,19 @@ class App:
                 now, self.config.active_start, self.config.active_end
             ) and self.store.count_tracked():
                 try:
-                    await self._run_fast_scan()
+                    outcome = await self._run_fast_scan()
                     consecutive_errors = 0
+                    self._last_fast_scan_at = self._now()
+                    self._fast_scan_count += 1
+                    # A silent loop is indistinguishable from a dead one, so
+                    # emit a periodic heartbeat at INFO (~every 10 min at 30s).
+                    if outcome.became_available:
+                        log.info(
+                            "fast tier: %d set(s) became available",
+                            len(outcome.became_available),
+                        )
+                    elif self._fast_scan_count % 20 == 0:
+                        log.info("fast tier: %d checks so far", self._fast_scan_count)
                 except BrickBorrowError as exc:
                     consecutive_errors += 1
                     # Don't hammer a struggling store at 30s intervals.
