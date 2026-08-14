@@ -66,6 +66,17 @@ query($slug: String!) {
 }
 """ % _PRODUCT_FIELDS
 
+_IN_STOCK_QUERY = """
+query($offset: Int!, $limit: Int!, $filters: ProductFilters) {
+  catalog {
+    products(offset: $offset, limit: $limit, filters: $filters, onlyVisible: true) {
+      totalCount
+      list { %s }
+    }
+  }
+}
+""" % _PRODUCT_FIELDS
+
 _SEARCH_QUERY = """
 query($filters: ProductFilters, $limit: Int!) {
   catalog {
@@ -312,6 +323,48 @@ class BrickBorrowClient:
         log.info("fetched %d products (store reports %s)", len(products), total)
         if not products:
             raise BrickBorrowError("catalog came back empty — treating as a failed scan")
+        return products
+
+    async def fetch_in_stock(self) -> list[Product]:
+        """Only the borrowable products — the fast tier's whole job.
+
+        Filtering server-side to IN_STOCK_STATUS returns ~420 products in **5
+        requests / ~1.0 s** instead of 12 requests for all 1,127. That is what
+        makes a 30-second cadence affordable.
+
+        ⚠️ This is a PARTIAL view. A tracked set missing from it is *not
+        available*; it is NOT necessarily delisted. Only the full sweep can tell
+        those apart, which is why the slow tier still exists.
+        """
+        products: list[Product] = []
+        offset = 0
+        total = None
+
+        while True:
+            data = await self._graphql(
+                _IN_STOCK_QUERY,
+                {
+                    "offset": offset,
+                    "limit": PAGE_SIZE,
+                    "filters": {"inventoryStatus": "IN_STOCK_STATUS"},
+                },
+            )
+            block = (data.get("catalog") or {}).get("products") or {}
+            page = block.get("list") or []
+            if total is None:
+                total = int(block.get("totalCount") or 0)
+
+            products.extend(Product.from_api(p) for p in page)
+            offset += PAGE_SIZE
+            if not page or offset >= total:
+                break
+            if offset > 20_000:
+                log.warning("in-stock paging exceeded 20k, stopping early")
+                break
+
+        # Unlike the full sweep, an empty result is legitimate here: it means
+        # nothing at all is borrowable. So we must NOT treat it as a failure.
+        log.debug("fast tier: %d in-stock products", len(products))
         return products
 
     async def product_by_slug(self, slug: str) -> Optional[Product]:

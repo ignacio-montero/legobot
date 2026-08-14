@@ -26,6 +26,7 @@ from .commands import COMMAND_MENU, CommandHandler
 from .config import Config
 from .scanner import (
     ScanOutcome,
+    evaluate_availability,
     evaluate_scan,
     next_scan_delay,
     render_available_alert,
@@ -61,7 +62,12 @@ class App:
         return datetime.now(self.config.timezone)
 
     async def apply_catalog(
-        self, products: list, *, notify: bool, inform: Optional[bool] = None
+        self,
+        products: list,
+        *,
+        notify: bool,
+        inform: Optional[bool] = None,
+        partial: bool = False,
     ) -> ScanOutcome:
         """Fold a catalogue snapshot into tracked state, and optionally alert.
 
@@ -86,7 +92,13 @@ class App:
                 self._last_scan_error = None
                 return ScanOutcome()
 
-            outcome = evaluate_scan(tracked, index_by_id(products))
+            # `partial` means `products` is the in-stock-only snapshot, where
+            # absence means "not available" rather than "delisted".
+            outcome = (
+                evaluate_availability(tracked, products)
+                if partial
+                else evaluate_scan(tracked, index_by_id(products))
+            )
 
             # Persist first, notify second. If sending fails we'd rather drop a
             # message than re-fire the same alert on every subsequent scan.
@@ -103,12 +115,16 @@ class App:
             ]
 
             for item, product in outcome.seen:
+                # NB: in a partial scan `product` may be the TrackedSet itself
+                # (for an unavailable set), so availability comes from the
+                # outcome rather than from the display object.
+                is_available = item.product_id in outcome.available_ids
                 # Announced stays true for as long as the set remains available,
                 # and is cleared the moment it isn't — which re-arms both alerts.
-                announced = product.available and (inform or item.announced)
+                announced = is_available and (inform or item.announced)
                 self.store.record_scan(
                     item.product_id,
-                    available=product.available,
+                    available=is_available,
                     name=product.name,
                     url_part=product.url_part,
                     pieces=product.pieces,
@@ -122,6 +138,19 @@ class App:
             if notify:
                 await self._send_alerts(outcome)
             return outcome
+
+    async def _run_fast_scan(self) -> ScanOutcome:
+        """In-stock-only poll. The low-latency path to a 🟢 alert.
+
+        Can only ever report a set as newly available (see evaluate_availability),
+        so it never contradicts the authoritative full sweep.
+        """
+        if not self.store.count_tracked():
+            return ScanOutcome()
+        products = await self.client.fetch_in_stock()
+        return await self.apply_catalog(
+            products, notify=not self.store.paused, partial=True
+        )
 
     async def _run_scan(
         self, *, notify: bool, inform: Optional[bool] = None
@@ -254,6 +283,43 @@ class App:
             if self._stopping.is_set():
                 return
 
+    async def _fast_loop(self) -> None:
+        """Tight in-stock poll. Separate task so a slow full sweep can't delay it."""
+        if not self.config.fast_tier_enabled:
+            log.info("fast tier disabled")
+            return
+
+        await asyncio.sleep(8)  # let startup settle behind the first full sweep
+        consecutive_errors = 0
+
+        while not self._stopping.is_set():
+            now = self._now()
+            if within_active_hours(
+                now, self.config.active_start, self.config.active_end
+            ) and self.store.count_tracked():
+                try:
+                    await self._run_fast_scan()
+                    consecutive_errors = 0
+                except BrickBorrowError as exc:
+                    consecutive_errors += 1
+                    # Don't hammer a struggling store at 30s intervals.
+                    if consecutive_errors in (1, 5, 20):
+                        log.warning(
+                            "fast scan failed (%s in a row): %s", consecutive_errors, exc
+                        )
+                except Exception:  # noqa: BLE001 - the loop must survive anything
+                    log.exception("unexpected error in fast scan")
+                    consecutive_errors += 1
+
+            delay = self.config.fast_interval_seconds * min(
+                8, max(1, consecutive_errors)  # linear backoff, capped at 8x
+            )
+            try:
+                await asyncio.wait_for(self._stopping.wait(), timeout=delay)
+                return
+            except asyncio.TimeoutError:
+                pass
+
     async def _command_loop(self) -> None:
         offset = self.store.telegram_offset
         consecutive_errors = 0
@@ -330,7 +396,12 @@ class App:
                 f"Tracking {tracked} set(s), checking every "
                 f"{self.config.poll_interval_minutes} min between "
                 f"{self.config.active_start:%H:%M}–{self.config.active_end:%H:%M} "
-                f"{self.config.tz_name}."
+                f"{self.config.tz_name}"
+                + (
+                    f", plus a {self.config.fast_interval_seconds}s fast check."
+                    if self.config.fast_tier_enabled
+                    else "."
+                )
                 + ("\n\n⏸ Notifications are currently paused." if self.store.paused else "")
                 + ("\n\nSend /help to get started." if not tracked else "")
             )
@@ -338,6 +409,7 @@ class App:
             tasks = [
                 asyncio.create_task(self._command_loop(), name="commands"),
                 asyncio.create_task(self._scan_loop(), name="scanner"),
+                asyncio.create_task(self._fast_loop(), name="fast-scanner"),
             ]
             try:
                 await self._stopping.wait()

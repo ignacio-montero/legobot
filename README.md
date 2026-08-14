@@ -16,10 +16,18 @@ Open on Brick Borrow →
 
 ## How it works
 
-Every 5 minutes between 07:00 and 19:00 UK time, it reads Brick Borrow's
-storefront catalog API and compares each tracked set against what it saw last
-time. When one flips from unavailable to available, you get a message — **once**
-per transition, not every cycle.
+Two polling tiers run between 07:00 and 19:00 UK time:
+
+- **every 30 s** — a filtered "what's borrowable right now" query (5 requests,
+  ~0.75 s) that drives the 🟢 alert. Median time-to-detect ~15 s.
+- **every 5 min** — a full catalogue sweep that owns the 🔴 alert, renames,
+  delisting and piece counts.
+
+The fast tier can only ever report a set as *newly available*, never as gone —
+see [docs/RESEARCH.md](docs/RESEARCH.md) §4g for the subtle reason why.
+
+When a set flips from unavailable to available you get a message — **once** per
+transition, not every cycle.
 
 You get exactly two messages per availability cycle:
 

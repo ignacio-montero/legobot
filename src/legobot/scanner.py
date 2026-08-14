@@ -31,6 +31,10 @@ class ScanOutcome:
     # Subset of became_unavailable that we had actually announced. Filled by the
     # app, which is the only layer that knows what was communicated.
     gone_announced: list[tuple[TrackedSet, Product]] = field(default_factory=list)
+    # Product ids currently available. Stated explicitly rather than re-derived
+    # from the display objects, because in a partial scan the display object for
+    # an unavailable set is the TrackedSet itself, which has no `.available`.
+    available_ids: set = field(default_factory=set)
 
     @property
     def has_alerts(self) -> bool:
@@ -67,10 +71,47 @@ def evaluate_scan(tracked: list[TrackedSet], catalog: dict[str, Product]) -> Sca
 
         was = item.last_available
         now = product.available
+        if now:
+            outcome.available_ids.add(item.product_id)
         if now and was is not True:
             outcome.became_available.append((item, product))
         elif not now and was is True:
             outcome.became_unavailable.append((item, product))
+
+    return outcome
+
+
+def evaluate_availability(
+    tracked: list[TrackedSet], in_stock: list[Product]
+) -> ScanOutcome:
+    """Fast-tier diff against an in-stock-only snapshot.
+
+    **This function can only ever turn a set ON, never off.** It reports sets
+    that have just become available and ignores everything absent from the
+    snapshot. That asymmetry is deliberate and load-bearing:
+
+    The in-stock filter is not a perfect complement of the full sweep — five
+    variant-managed merchandise products (jewellery, the builder's mat) read as
+    available in a full sweep yet never appear in the filtered list. If absence
+    here meant "unavailable", any such product would flap: the fast tier would
+    fire 🔴, the full sweep 5 minutes later would fire 🟢, forever.
+
+    So the fast tier only accelerates the *urgent* edge — "it's free, go now" —
+    and the authoritative full sweep owns going unavailable, which is not
+    latency-critical. Absence in a partial snapshot means **no new information**.
+    """
+    outcome = ScanOutcome()
+    present = {p.id: p for p in in_stock}
+
+    for item in tracked:
+        product = present.get(item.product_id)
+        if product is None or not product.available:
+            continue  # no information — leave it to the full sweep
+
+        outcome.seen.append((item, product))
+        outcome.available_ids.add(item.product_id)
+        if item.last_available is not True:
+            outcome.became_available.append((item, product))
 
     return outcome
 

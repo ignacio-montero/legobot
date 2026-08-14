@@ -13,8 +13,8 @@ counter-intuitive enough that you will otherwise "fix" working code.
 ## Current state (2026-08-13)
 
 **Deployed and running** on the homelab as `@LEGOBorrowBot`, image
-`ghcr.io/ignacio-montero/legobot:0.5.0`. 99 tests passing. Polls every 5 min,
-07:00–19:00 Europe/London.
+`ghcr.io/ignacio-montero/legobot:0.6.0`. 105 tests passing. Two-tier polling,
+07:00–19:00 Europe/London: in-stock query every 30s, full sweep every 5 min.
 
 ⚠️ **Every fresh catalogue must feed `App.apply_catalog`.** `/available` once
 fetched live data and discarded it, so browsing could reveal a set as available
@@ -32,6 +32,15 @@ do not run the bot locally without stopping it first.
 user has been told this is available" and gates the 🔴 gone-again alert, so we
 never announce an ending we didn't announce the start of. Commands that report
 availability in their reply must pass `inform=True`.
+
+⚠️ **The fast tier may only turn a set ON, never off.** The `IN_STOCK_STATUS`
+filter is not the exact complement of a full sweep — five variant-managed merch
+products appear available in a full sweep but never in the filtered list. If
+absence meant "unavailable" they would flap 🔴/🟢 between tiers forever. Absence
+in a partial snapshot means *no new information*.
+
+⚠️ **Adding to cart does not reserve stock on Wix** — don't revisit the
+auto-cart idea without reading `docs/RESEARCH.md` §4f first.
 
 ## The two things that will trip you up
 

@@ -4,6 +4,48 @@ Newest first. Each entry: what was decided, why, and what was rejected.
 
 ---
 
+## 2026-08-14 — Two-tier polling (30s fast + 5min full); auto-cart rejected
+
+**The ask.** Desirable sets are taken in under 5 minutes, so a 5-minute cadence
+reports them already gone. Proposal explored: have the bot log in and put the set
+in the basket to hold it.
+
+**Auto-cart: rejected, because the mechanism does not exist.** Wix does not
+reserve inventory on add-to-cart — it decrements at purchase, and
+reserve-on-cart is an open feature request. Corroborated here by a read-only
+storefront API (zero mutations) and no reserve/hold field on `Inventory` or
+`Product`. A set in your basket stays claimable by anyone else, so the plan would
+have bought a stored password, a login session, a headless browser and account
+risk **in exchange for nothing**. The only action that claims a set is completing
+the pick — the purchasing power the owner explicitly ruled out. Full write-up in
+`RESEARCH.md` §4f, including the one test not run and how to run it.
+
+**Decision: attack latency instead.** Two tiers:
+
+| Tier | Query | Cost | Cadence | Owns |
+|---|---|---|---|---|
+| Fast | `inventoryStatus: IN_STOCK_STATUS` | 5 req / 0.75 s | **30 s** | 🟢 became-available |
+| Slow | full sweep | 12 req / 1.4 s | 5 min | 🔴 gone, renames, delisting, piece counts |
+
+Median time-to-detect drops **~150 s → ~15 s**, at 0.17 req/s.
+
+**The fast tier is deliberately one-directional — it can turn a set ON, never
+off.** Comparing the two live queries showed they are *not* exact complements:
+five variant-managed merch products read as available in a full sweep but never
+appear in the filtered list. Had absence in the fast tier meant "unavailable",
+those would flap 🔴/🟢 between tiers forever. Making absence mean *no new
+information* removes the whole class of bug, and costs nothing: going unavailable
+is not latency-critical.
+
+**Rejected:** polling individual tracked sets on a tight loop. For 10 sets at 30 s
+that is 14,400 req/day and covers only those 10; the filtered sweep is half the
+requests and covers all 48.
+
+**Not changed:** no login, no password, no browser. Every security property in
+ARCHITECTURE.md survives.
+
+---
+
 ## 2026-08-14 — "Gone again" alerts, gated by an `announced` flag
 
 **The question.** If a set is announced as available and not acted on, does the

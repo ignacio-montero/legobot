@@ -50,6 +50,13 @@ class Config:
     active_end: dtime = field(default_factory=lambda: dtime(19, 0))
     timezone: ZoneInfo = field(default_factory=lambda: ZoneInfo("Europe/London"))
 
+    # Fast tier: an in-stock-only sweep (5 requests, ~1s) that drives the
+    # availability alerts. Cheap enough to run every 30s, which cuts median
+    # time-to-detect from ~150s to ~15s. The slow full sweep above still runs,
+    # because only it can tell "out of stock" from "delisted".
+    fast_interval_seconds: int = 30
+    fast_tier_enabled: bool = True
+
     # Guard rails.
     max_tracked_sets: int = 100
     http_timeout_seconds: float = 30.0
@@ -92,6 +99,8 @@ class Config:
             active_start=_parse_hhmm(os.getenv("ACTIVE_START", "07:00"), "ACTIVE_START"),
             active_end=_parse_hhmm(os.getenv("ACTIVE_END", "19:00"), "ACTIVE_END"),
             timezone=tz,
+            fast_interval_seconds=_env_int("FAST_INTERVAL_SECONDS", 30, minimum=10),
+            fast_tier_enabled=os.getenv("FAST_TIER_ENABLED", "1").strip() not in ("0", "false", "no"),
             max_tracked_sets=_env_int("MAX_TRACKED_SETS", 100),
             http_timeout_seconds=float(os.getenv("HTTP_TIMEOUT_SECONDS", "30")),
         )
