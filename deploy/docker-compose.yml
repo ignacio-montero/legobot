@@ -11,7 +11,7 @@
 #    brickborrow.com) are OUTBOUND, so there is nothing to bind and no UFW rule
 #    to add. Same shape as tennisbot-prefs.
 #  - Secrets live in an UNTRACKED .env in THIS directory ON THE SERVER.
-#  - mem_limit set, per the 8 GB soldered ceiling.
+#  - mem_limit set, so one service can't starve the rest of the host.
 #
 # ⚠️ Only ONE process may long-poll a given Telegram bot token. Do not run this
 #    locally while the container is up — the second one gets HTTP 409.

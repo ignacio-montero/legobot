@@ -1,17 +1,18 @@
 # LEGO Borrow Bot
 
-A Telegram bot that watches [Brick Borrow](https://www.brickborrow.com) sets and
-messages you the moment one becomes available to borrow.
+A Telegram bot that watches a LEGO rental storefront and messages you the
+moment a set you're tracking becomes available to borrow.
 
-Brick Borrow lets you subscribe to "notify me when available" for a maximum of
-**10 sets**. This watches as many as you like.
+The storefront's own "notify me when available" feature covers a limited number
+of sets at a time. This is a personal tracker that keeps an eye on the rest,
+using the same public catalogue data the site's own pages read.
 
 ```
 🟢 Available now
 
 LEGO® (10348) Botanicals™ Japanese Red Maple Bonsai Tree
 474 pcs
-Open on Brick Borrow →
+Open on the storefront →
 ```
 
 ## How it works
@@ -78,7 +79,7 @@ Useful because the biggest sets are almost never free: at the time of writing,
 395 sets were available but the largest was 2,870 pieces, while the 10,001-piece
 Eiffel Tower was out on loan.
 
-## ⚠️ Brick Borrow's URLs name the wrong set
+## ⚠️ the storefront's URLs name the wrong set
 
 This is not a bug in the bot. The store reuses URL slugs when sets are swapped:
 
@@ -119,7 +120,7 @@ outbound). Full runbook: [deploy/DEPLOY.md](deploy/DEPLOY.md).
 
 ```
 src/legobot/
-  brickborrow.py   Wix storefront API client + URL parsing
+  brickborrow.py   storefront catalogue API client + URL parsing
   scanner.py       the notification state machine (pure functions)
   store.py         SQLite persistence
   telegram.py      Telegram Bot API client (long polling)

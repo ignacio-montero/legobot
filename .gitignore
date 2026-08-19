@@ -11,3 +11,6 @@ data/
 
 # macOS cruft
 .DS_Store
+
+# Detailed site recon — kept local, never published.
+docs/RESEARCH.local.md

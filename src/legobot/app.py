@@ -36,7 +36,7 @@ from .scanner import (
     within_active_hours,
 )
 from .store import Store
-from .telegram import TelegramClient, TelegramError, esc
+from .telegram import TelegramClient, TelegramError, esc, esc_attr
 
 log = logging.getLogger(__name__)
 
@@ -197,7 +197,7 @@ class App:
             for _, product in available:
                 suffix = f" · {product.pieces_label}" if product.pieces_label else ""
                 lines.append(
-                    f'• <a href="{esc(product.url)}">{esc(product.name)}</a>{suffix}'
+                    f'• <a href="{esc_attr(product.url)}">{esc(product.name)}</a>{suffix}'
                 )
         else:
             lines.append("🔴 None of your tracked sets are available right now.")

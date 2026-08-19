@@ -12,7 +12,7 @@ from typing import Awaitable, Callable, Optional
 
 from .brickborrow import BrickBorrowClient, BrickBorrowError, extract_slugs, slug_from_url
 from .store import Store
-from .telegram import esc
+from .telegram import esc, esc_attr
 
 log = logging.getLogger(__name__)
 
@@ -238,7 +238,7 @@ class CommandHandler:
             tracked = " · <i>tracked</i>" if self.store.get(product.id) else ""
             suffix = f" · {product.pieces_label}" if product.pieces_label else ""
             lines.append(
-                f'{mark} <a href="{esc(product.url)}">{esc(product.name)}</a>{suffix}{tracked}'
+                f'{mark} <a href="{esc_attr(product.url)}">{esc(product.name)}</a>{suffix}{tracked}'
             )
             lines.append(f"   <code>/add {esc(product.url)}</code>")
         return "\n".join(lines)
@@ -256,7 +256,7 @@ class CommandHandler:
                 mark = "🟢"
             else:
                 mark = "🔴"
-            lines.append(f'{index}. {mark} <a href="{esc(item.url)}">{esc(item.name)}</a>')
+            lines.append(f'{index}. {mark} <a href="{esc_attr(item.url)}">{esc(item.name)}</a>')
             if item.pieces_label:
                 lines.append(f"    <i>{item.pieces_label}</i>")
 
@@ -377,7 +377,7 @@ class CommandHandler:
             ):
                 suffix = f" · {product.pieces_label}" if product.pieces_label else ""
                 lines.append(
-                    f'• <a href="{esc(product.url)}">{esc(product.name)}</a>{suffix}'
+                    f'• <a href="{esc_attr(product.url)}">{esc(product.name)}</a>{suffix}'
                 )
             lines.append("")
             lines.append("———")
@@ -392,7 +392,7 @@ class CommandHandler:
             mark = " ✅" if product.id in tracked_ids else ""
             lines.append(
                 f'{index}. <b>{product.pieces:,}</b> pcs — '
-                f'<a href="{esc(product.url)}">{esc(product.name)}</a>{mark}'
+                f'<a href="{esc_attr(product.url)}">{esc(product.name)}</a>{mark}'
             )
 
         lines.append("")

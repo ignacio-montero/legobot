@@ -11,7 +11,7 @@ Container healthy, using ~24 MB of its 192 MB limit, no published ports.
 |---|---|
 | Site recon | ✅ Done — `docs/RESEARCH.md` |
 | PRD / architecture / decisions | ✅ Written |
-| Brick Borrow API client | ✅ Verified live: 1127 products in 1.3 s |
+| the storefront API client | ✅ Verified live: 1127 products in 1.3 s |
 | Tracking store (SQLite) | ✅ Done, restart-safe |
 | Notification state machine | ✅ Done, 55 tests passing |
 | Telegram commands | ✅ Done (add/search/list/remove/check/pause/resume/status) |
@@ -36,7 +36,7 @@ scan reported it. The notification did fire correctly — see `docs/DECISIONS.md
 
 ## Using it
 
-Message **@LEGOBorrowBot** on Telegram. Paste a Brick Borrow product link to
+Message **@LEGOBorrowBot** on Telegram. Paste a the storefront product link to
 start tracking; `/help` lists everything.
 
 ⚠️ It polls **07:00–19:00 Europe/London**, so outside those hours it is silent
@@ -52,7 +52,7 @@ does this).
 
 ## Also worth knowing
 
-You gave the Brick Borrow account password. **It turned out to be unnecessary**
+You gave the storefront account password. **It turned out to be unnecessary**
 — the catalogue is readable anonymously — so it is not stored anywhere in this
 repo, in the image, or on the server. Since it was shared in chat, changing it
 is cheap peace of mind.

@@ -6,7 +6,7 @@ Read RESEARCH first — nearly every choice here is downstream of one finding.
 ## The shape of it
 
 ```
-        Telegram                                    brickborrow.com
+        Telegram                                    <storefront-domain>
            ▲ │                                             ▲
   outbound │ │ long-poll (getUpdates)          outbound    │ GraphQL
   sendMsg  │ ▼                                  HTTPS      │ (anonymous)
@@ -36,7 +36,7 @@ anonymously**. So:
 
 | | Headless browser | **Catalog API (chosen)** |
 |---|---|---|
-| Credentials on the server | Brick Borrow password | **none** |
+| Credentials on the server | the storefront password | **none** |
 | RAM | ~1.5 GB spike (Chromium) | **192 MB** |
 | One full check | ~1–2 min, N page loads | **~1.3 s, 12 requests** |
 | Breakage mode | Any CSS/layout change | Only a real API change |
@@ -44,7 +44,7 @@ anonymously**. So:
 
 The security consequence is the one worth internalising: **a design choice
 removed an entire class of risk.** There is no password in the `.env`, so a
-compromised container leaks nothing about the Brick Borrow account. Compare
+compromised container leaks nothing about the storefront account. Compare
 tennisbot, which must hold Everyone Active credentials and accepts that risk
 because there is no alternative.
 
@@ -116,7 +116,7 @@ meta(key, value)  -- paused flag, Telegram update cursor
 ```
 
 **Why `product_id` is the primary key and not the URL.** RESEARCH §5 found that
-Brick Borrow renames products in place while keeping the old slug — the page at
+the storefront renames products in place while keeping the old slug — the page at
 `…/lego-10349-icons-happy-plants` is really the *Bonsai Tree*. The slug is
 unique but semantically unreliable; the Wix `id` is stable and meaningless,
 which is exactly what you want in a key. Storing `name` alongside it is what
@@ -196,7 +196,7 @@ result.**
 
 ## Security posture
 
-- **No Brick Borrow credentials anywhere.** The API is anonymous.
+- **No the storefront credentials anywhere.** The API is anonymous.
 - **No inbound ports.** Both conversations are outbound, so the container needs
   no firewall rule and is unreachable from the LAN or the internet.
 - **Single-user lockdown**: messages from any chat id other than the owner's are

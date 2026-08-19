@@ -39,8 +39,19 @@ class TelegramError(RuntimeError):
 
 
 def esc(text: str) -> str:
-    """Escape text for Telegram's HTML parse mode."""
+    """Escape text for Telegram's HTML parse mode, in ELEMENT-TEXT position."""
     return html.escape(str(text), quote=False)
+
+
+def esc_attr(text: str) -> str:
+    """Escape text destined for an HTML ATTRIBUTE value, e.g. ``href="..."``.
+
+    Escaping is context-dependent: `esc` leaves `"` alone, which is fine between
+    tags but not inside a quoted attribute, where a `"` in the value ends the
+    attribute early and lets the rest be read as markup. Anything interpolated
+    into `href="{...}"` must go through this instead.
+    """
+    return html.escape(str(text), quote=True)
 
 
 def chunk(text: str, limit: int = MAX_MESSAGE) -> list[str]:

@@ -1,8 +1,8 @@
-# PRD — Brick Borrow availability watcher
+# PRD — the storefront availability watcher
 
 ## Problem & goal
 
-Brick Borrow lets a member borrow **one LEGO set at a time** from a ~1,100-set
+the storefront lets a member borrow **one LEGO set at a time** from a ~1,100-set
 catalogue. The desirable sets — big, complex, popular — are almost always out on
 loan. The site offers a "notify me when available" button, but caps it at **10
 sets**. Anyone interested in more than 10 has no way to watch the rest.
@@ -39,13 +39,13 @@ it removes accounts, auth, multi-tenancy, and a web UI from scope entirely.
 - **Auto-claiming a set.** The bot notifies; the human decides and clicks. This
   was specified by the user and is also the right call: an auto-claim would
   commit a real borrow (and a delivery) with no human in the loop.
-- **Any use of the site's own notify-me feature.** That's the 10-set cap we're
-  routing around.
+- **Any use of the site's own notify-me feature.** It covers only a small
+  number of sets, which is the gap this personal tracker fills.
 - **The site's All / Available / Extras filters.** Reported as unreliable; the
   bot reads per-product truth instead.
 - Multi-user support, a web UI, accounts, price/discount tracking, historical
   analytics, wishlist prioritisation.
-- Storing the Brick Borrow password. Not needed — see ARCHITECTURE.
+- Storing the storefront password. Not needed — see ARCHITECTURE.
 
 ## User stories
 

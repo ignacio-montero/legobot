@@ -2,9 +2,10 @@
 
 ## What this is
 
-A single-user Telegram bot that watches [brickborrow.com](https://www.brickborrow.com)
-LEGO sets and notifies the owner when one becomes borrowable. It exists to route
-around the site's 10-set cap on its own "notify me" feature.
+A single-user Telegram bot that watches a LEGO rental storefront and notifies
+the owner when a tracked set becomes borrowable. The site's own "notify me"
+feature covers a limited number of sets; this is a personal tracker for the
+rest, built on the same public catalogue data the site's pages read.
 
 **Read [docs/RESEARCH.md](docs/RESEARCH.md) before touching anything.** Nearly
 every design choice is downstream of one of its findings, and two of them are
@@ -48,7 +49,7 @@ auto-cart idea without reading `docs/RESEARCH.md` §4f first.
 That field reads `"in_stock"` on sets with quantity 0. Trusting it makes the bot
 fire constantly.
 
-**2. Brick Borrow's URL slugs name the wrong set.** `…/lego-10349-icons-happy-plants`
+**2. the storefront's URL slugs name the wrong set.** `…/lego-10349-icons-happy-plants`
 is really the *Bonsai Tree*; Happy Plants is at the `-1` suffixed slug. This is
 why tracking is keyed on the immutable Wix `product_id`, why `/add` echoes the
 store's real name back, why `/search` exists, and why renames raise a warning.
@@ -88,7 +89,7 @@ the container is up gives both HTTP 409.
   ("never notifies", "notifies forever") are invisible in production.
 - The bot **notifies, it never claims a set.** Auto-claiming would commit a real
   borrow and delivery with no human in the loop. Out of scope by design.
-- No Brick Borrow credentials anywhere — not in the repo, image, or server. If a
+- No the storefront credentials anywhere — not in the repo, image, or server. If a
   change seems to need a login, re-read RESEARCH.md first; it probably doesn't.
-- Deploy target is the homelab; `~/Development/homelab` is the source of truth
+- Deploy target is the homelab; the private infra repo is the source of truth
   for the box. Runbook: [deploy/DEPLOY.md](deploy/DEPLOY.md).

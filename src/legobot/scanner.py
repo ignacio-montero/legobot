@@ -153,7 +153,7 @@ def next_scan_delay(
 
 
 def render_available_alert(pairs: list[tuple[TrackedSet, Product]]) -> str:
-    from .telegram import esc
+    from .telegram import esc, esc_attr
 
     if len(pairs) == 1:
         _, product = pairs[0]
@@ -161,13 +161,13 @@ def render_available_alert(pairs: list[tuple[TrackedSet, Product]]) -> str:
         return (
             "🟢 <b>Available now</b>\n\n"
             f"<b>{esc(product.name)}</b>{detail}\n"
-            f'<a href="{esc(product.url)}">Open on Brick Borrow →</a>'
+            f'<a href="{esc_attr(product.url)}">Open on Brick Borrow →</a>'
         )
 
     lines = [f"🟢 <b>{len(pairs)} sets just became available</b>", ""]
     for _, product in pairs:
         suffix = f" · {product.pieces_label}" if product.pieces_label else ""
-        lines.append(f'• <a href="{esc(product.url)}">{esc(product.name)}</a>{suffix}')
+        lines.append(f'• <a href="{esc_attr(product.url)}">{esc(product.name)}</a>{suffix}')
     return "\n".join(lines)
 
 
@@ -199,7 +199,7 @@ def render_gone_alert(pairs: list[tuple[TrackedSet, Product]]) -> str:
 
 
 def render_rename_alert(pairs: list[tuple[TrackedSet, Product]]) -> str:
-    from .telegram import esc
+    from .telegram import esc, esc_attr
 
     lines = [
         "⚠️ <b>A tracked set was renamed</b>",
@@ -210,18 +210,18 @@ def render_rename_alert(pairs: list[tuple[TrackedSet, Product]]) -> str:
     ]
     for item, product in pairs:
         lines.append(f"• was: <i>{esc(item.name)}</i>")
-        lines.append(f'  now: <a href="{esc(product.url)}">{esc(product.name)}</a>')
+        lines.append(f'  now: <a href="{esc_attr(product.url)}">{esc(product.name)}</a>')
     lines.append("")
     lines.append("Use /remove if this is no longer the set you wanted.")
     return "\n".join(lines)
 
 
 def render_vanished_alert(items: list[TrackedSet]) -> str:
-    from .telegram import esc
+    from .telegram import esc, esc_attr
 
     lines = ["⚠️ <b>Tracked set no longer in the catalogue</b>", ""]
     for item in items:
-        lines.append(f'• <a href="{esc(item.url)}">{esc(item.name)}</a>')
+        lines.append(f'• <a href="{esc_attr(item.url)}">{esc(item.name)}</a>')
     lines.append("")
     lines.append("It may have been hidden or retired. It stays tracked in case it returns.")
     return "\n".join(lines)

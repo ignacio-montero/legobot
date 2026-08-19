@@ -219,7 +219,7 @@ interval ever drops below ~5 min.
 
 ## 2026-08-13 — Read the storefront catalog API instead of driving a browser
 
-**Decision.** Get availability from Brick Borrow's Wix Stores GraphQL API,
+**Decision.** Get availability from the storefront's catalogue API,
 anonymously. No Playwright, no login, no stored password.
 
 **Why.** Recon (`docs/RESEARCH.md`) found that although product *pages* are
@@ -229,10 +229,10 @@ to "make an HTTP request".
 
 **Rejected:** Playwright + login (needs the account password on the server,
 ~1.5 GB RAM, breaks on any layout change); HTML scraping (the data isn't in the
-HTML at all); the site's own notify-me feature (that's the 10-set cap we're
-routing around).
+HTML at all); the site's own notify-me feature (limited to a small number of
+sets, which is the gap this tool fills for personal use).
 
-**Consequence.** No Brick Borrow credential exists anywhere in this system — a
+**Consequence.** No the storefront credential exists anywhere in this system — a
 whole class of risk designed out rather than mitigated.
 
 ---
@@ -257,7 +257,7 @@ Trusting it would have made the bot fire constantly.
 **Decision.** Primary key is the immutable `product_id`; the slug is stored only
 for building links, and the product name is stored to detect renames.
 
-**Why.** Brick Borrow reuses URLs when they swap sets: `…/lego-10349-icons-happy-plants`
+**Why.** the storefront reuses URLs when they swap sets: `…/lego-10349-icons-happy-plants`
 is really the *Bonsai Tree*, and the real Happy Plants set lives at the same slug
 with a `-1` suffix. Slugs are unique but they lie about identity.
 
